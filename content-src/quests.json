@@ -1,0 +1,21 @@
+{
+  "_comment": [
+    "Authored quest pack. Source format unchanged by P3-W1.",
+    "`requires` still accepts an array of capability names, a single name, or a",
+    "raw bitmask, exactly as before. A quest whose capability the board does not",
+    "have is filtered at runtime, which is why there is no per-board pack.",
+    "",
+    "  python scripts/sign_content_pack.py --kind quests \\",
+    "      --in content-src/quests.json --out data/content/quests.hcp"
+  ],
+  "quests": [
+    { "id": "check_in",     "text": "Say hello three times",      "kind": "care",    "target": 3,  "xp": 10, "bond": 4 },
+    { "id": "feed_up",      "text": "Feed me twice",              "kind": "care",    "target": 2,  "xp": 8,  "bond": 6 },
+    { "id": "stretch",      "text": "Take me for a walk",         "kind": "explore", "target": 1,  "xp": 12, "bond": 5, "requires": ["imu"] },
+    { "id": "new_ground",   "text": "Find four new networks",     "kind": "explore", "target": 4,  "xp": 18, "bond": 3 },
+    { "id": "patrol_pair",  "text": "Run two patrols",            "kind": "cyber",   "target": 2,  "xp": 20, "bond": 4 },
+    { "id": "read_a_tip",   "text": "Read one security tip",      "kind": "cyber",   "target": 1,  "xp": 6,  "bond": 2 },
+    { "id": "hold_still",   "text": "Sit through a focus block",  "kind": "life",    "target": 1,  "xp": 14, "bond": 8 },
+    { "id": "step_outside", "text": "Go outside once today",      "kind": "life",    "target": 1,  "xp": 15, "bond": 9 }
+  ]
+}

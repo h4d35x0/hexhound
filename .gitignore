@@ -1,0 +1,91 @@
+# PlatformIO
+.pio/
+
+# Editor settings
+.vscode/
+.claude/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Local notes
+031226.txt
+CLAUDE.md
+tasks/lessons.md
+tasks/todo.md
+# Session working notes are local by design. They accumulate the machine
+# names, serial ports, device addresses and bench forensics of whoever ran
+# the session, none of which belongs in a public repository. Durable
+# lessons get lifted into docs/ instead; see docs/build-and-bench-notes.md.
+tasks/*.md
+/HANDOFF-*.md
+
+# Local vendor/reference clones
+.vendor/
+
+# Release/build artifacts
+#
+# Anchored, per the /content/ note at the bottom of this file: a bare
+# "firmware/" matches a directory of that name at ANY depth. Today the only
+# other match is web/firmware/, which is ignored deliberately a few lines down,
+# so the bare form happened to be harmless - but it is the same trap that
+# swallowed src/content/, waiting for anyone who adds a src/firmware/.
+#
+# Note the asymmetry with keys/ below: build-output patterns are anchored so
+# they cannot reach into source, while a SECRETS pattern is deliberately left
+# unanchored so it matches at every depth. For ignores, being too narrow leaks;
+# for build output, being too broad hides source.
+/firmware/
+HexHound-Firmware-*.zip
+sim-build.log
+serial_test_build.log
+*build_flags.txt
+__pycache__/
+
+# Web flasher build output (staged by scripts/stage_web_flasher.py)
+web/firmware/
+web/manifests/
+web/boards.json
+
+# Content-pack signing keys. The PRIVATE half of a content signing key must
+# never be committed: anyone holding it can mint content that every device
+# carrying the matching public key accepts. Only the PUBLIC half belongs in
+# the tree, and it lives in src/content/content_pubkey.h as source.
+keys/
+*.key
+!*.pub.key
+
+# Signed content packs are build output of scripts/sign_content_pack.py, not
+# source. The authored JSON under content-src/ is the source.
+data/content/*.hcp
+
+# Local agent/tool scratch
+.codex/
+.playwright-mcp/
+
+# Backups left behind by the framework patch scripts
+*.orig
+
+# Signed content packs are build output: authored source lives in content-src/
+# and the signed .hcp files are produced by scripts/sign_content_pack.py.
+#
+# LEADING SLASH IS LOAD-BEARING. Without it this pattern matches a directory
+# named "content" at ANY depth, which silently swallowed the whole of
+# src/content/: content_crypto, content_cbor, content_pack and content_pubkey
+# were on disk and building locally while being invisible to git. The P3-W1
+# commit therefore pushed a main that no fresh clone could compile, and the
+# "green suites" that vouched for it were green only on the one machine that
+# still had the untracked files. Anchor build-output patterns to the repo root.
+/content/
+
+# Contact sheet from `gen_wear_anchors.py --preview`. A verification artifact,
+# regenerated on demand from the art and the table, so it is not history.
+/wear_anchors_preview.png
+
+# Demo recordings from `scripts/make_demo_video.py`. Regenerated on demand from
+# the simulator and the script, so the script is the artifact worth keeping in
+# history and half a megabyte of MP4 per run is not.
+/hexhound-demo-*.mp4
+/hexhound-demo-*.gif
+LANE_*_CALLSITE.md

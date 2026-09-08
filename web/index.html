@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HexHound Web Flasher</title>
+<link rel="icon" href="img/sentinel.png">
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<style>
+  :root {
+    --bg: #06080d;
+    --panel: #0d1219;
+    --line: #1c2733;
+    --ink: #e6edf5;
+    --muted: #7d8b9c;
+    --cyan: #00e5ff;
+    --green: #3cff6e;
+    --amber: #ffb020;
+    --red: #ff423a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: ui-monospace, "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 40px 20px 64px; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 22px; margin-bottom: 30px; }
+  .eyebrow { color: var(--cyan); letter-spacing: .34em; text-transform: uppercase;
+             font-size: .68rem; margin: 0 0 10px; }
+  h1 { margin: 0; font-size: clamp(1.7rem, 5vw, 2.5rem); letter-spacing: .02em; }
+  .lede { color: var(--muted); max-width: 62ch; margin: 12px 0 0; }
+
+  /* ---- the pet ---- */
+  .stage {
+    display: grid; place-items: center; gap: 18px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 34px 20px 28px; margin-bottom: 26px; position: relative; overflow: hidden;
+  }
+  .halo {
+    position: absolute; width: 300px; height: 300px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,229,255,.16), transparent 62%);
+    opacity: 0; transition: opacity .5s ease; pointer-events: none;
+  }
+  .stage.busy .halo { opacity: 1; animation: pulse 1.9s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { transform: scale(.9); } 50% { transform: scale(1.12); } }
+  #pet {
+    width: 190px; height: 190px; image-rendering: auto; position: relative;
+    filter: drop-shadow(0 0 22px rgba(0,229,255,.28));
+    transition: transform .45s cubic-bezier(.2,1.5,.4,1), opacity .3s ease;
+  }
+  #pet.evolving { animation: evolve .75s cubic-bezier(.2,1.5,.4,1); }
+  @keyframes evolve {
+    0%   { transform: scale(1);    filter: drop-shadow(0 0 22px rgba(0,229,255,.28)); }
+    35%  { transform: scale(.55);  filter: drop-shadow(0 0 60px rgba(255,255,255,.95)) brightness(2.6); }
+    100% { transform: scale(1);    filter: drop-shadow(0 0 22px rgba(0,229,255,.28)); }
+  }
+  .stage-name { font-size: 1.15rem; letter-spacing: .18em; text-transform: uppercase;
+                color: var(--cyan); min-height: 1.6em; text-align: center; }
+  .stage-sub { color: var(--muted); font-size: .82rem; margin-top: -12px; text-align: center;
+               min-height: 1.4em; }
+
+  /* ---- progress ---- */
+  .bar { width: 100%; max-width: 460px; height: 12px; background: #101823;
+         border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0;
+             background: linear-gradient(90deg, var(--cyan), var(--green));
+             transition: width .35s ease; }
+  .pct { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .8rem; }
+
+  /* ---- boards ---- */
+  h2 { font-size: .8rem; letter-spacing: .28em; text-transform: uppercase;
+       color: var(--muted); margin: 30px 0 12px; font-weight: 600; }
+  .boards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(232px, 1fr)); }
+  .board {
+    text-align: left; background: var(--panel); color: var(--ink); cursor: pointer;
+    border: 1px solid var(--line); border-radius: 11px; padding: 13px 15px;
+    font: inherit; transition: border-color .18s ease, background .18s ease;
+  }
+  .board:hover { border-color: #2f4257; background: #111823; }
+  .board[aria-pressed="true"] { border-color: var(--cyan); background: #0c1a22; }
+  .board b { display: block; font-weight: 600; letter-spacing: .01em; }
+  .board span { color: var(--muted); font-size: .74rem; }
+
+  .actions { margin-top: 22px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  esp-web-install-button { --esp-tools-button-color: #04121a; }
+  .hint { color: var(--muted); font-size: .8rem; }
+
+  .note { border-left: 3px solid var(--amber); background: #12100a;
+          padding: 12px 16px; margin: 26px 0 0; color: #d9c9a4; font-size: .85rem; border-radius: 0 8px 8px 0; }
+  .note b { color: var(--amber); }
+  .unsupported { border-left-color: var(--red); background: #140a0a; color: #e3b3b0; }
+  .unsupported b { color: var(--red); }
+
+  footer { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--line);
+           color: var(--muted); font-size: .78rem; }
+  code { background: #101822; padding: .12em .45em; border-radius: 5px; color: var(--ink); }
+  a { color: var(--cyan); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">HexHound</p>
+    <h1>Web Flasher</h1>
+    <p class="lede">
+      Flash HexHound onto your board straight from the browser. Pick your board,
+      plug it in over USB, and hit install. Your pet evolves as the flash writes.
+    </p>
+  </header>
+
+  <div class="stage" id="stage">
+    <div class="halo"></div>
+    <img id="pet" src="img/egg.png" alt="HexHound pet">
+    <div class="stage-name" id="stageName">Ready</div>
+    <div class="stage-sub" id="stageSub">Select a board to begin</div>
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="pct" id="pct">&nbsp;</div>
+  </div>
+
+  <h2>1 &middot; Choose your board</h2>
+  <div class="boards" id="boards"></div>
+
+  <h2>2 &middot; Install</h2>
+  <div class="actions">
+    <esp-web-install-button id="installer" manifest="" disabled>
+      <button slot="activate" class="board" style="border-color:var(--cyan)">
+        <b>Connect &amp; Install</b><span>Chrome or Edge, USB cable</span>
+      </button>
+      <span slot="unsupported">
+        <div class="note unsupported" style="margin:0">
+          <b>This browser cannot flash.</b> Web Serial is only in Chrome and Edge on
+          desktop &mdash; not Firefox, Safari, or mobile. Use the manual esptool route below.
+        </div>
+      </span>
+      <span slot="not-allowed">
+        <div class="note unsupported" style="margin:0">
+          <b>Needs a secure context.</b> Open this page over HTTPS or from
+          <code>http://localhost</code>.
+        </div>
+      </span>
+    </esp-web-install-button>
+    <span class="hint" id="hint">No board selected yet.</span>
+  </div>
+
+  <!-- Per-board guidance from boards.json. Hidden unless the selected board
+       has a note. The T-RGB has one: it parks in ROM download mode after every
+       write and stays dark until it is reset by hand, which is the same
+       symptom as flashing the wrong image. -->
+  <div class="note" id="boardNote" hidden></div>
+
+  <div class="note">
+    <b>Heads up.</b> Flashing replaces everything on the board, including your pet's
+    saved stage and XP. The install dialog offers an erase option on first install;
+    leaving it unchecked keeps the existing filesystem where the board layout allows it.
+  </div>
+
+  <footer>
+    Prefer the command line? Every image is a merged binary, flashable at offset
+    <code>0x0</code>:<br>
+    <code>esptool.py --chip esp32s3 --port &lt;PORT&gt; --baud 921600 write_flash 0x0 &lt;image&gt;.bin</code><br>
+    Use <code>--chip esp32c5</code> for the T-Dongle C5. After flashing, power-cycle the
+    board &mdash; an esptool reset alone can leave it in download mode.
+  </footer>
+
+</div>
+
+<script type="module">
+  // Stage ladder, matching src/config.h. The flash progress walks it.
+  const STAGES = [
+    { img: "img/egg.png",      name: "Egg",                sub: "dormant" },
+    { img: "img/pup.png",      name: "Packet Pup",         sub: "wifi reconnaissance" },
+    { img: "img/beast.png",    name: "Beacon Beast",       sub: "ble beacon detection" },
+    { img: "img/gremlin.png",  name: "Gremlin Mode",       sub: "usb awareness missions" },
+    { img: "img/sentinel.png", name: "Sentinel", sub: "anomaly detection" },
+  ];
+
+  const el = {
+    stage:   document.getElementById("stage"),
+    pet:     document.getElementById("pet"),
+    name:    document.getElementById("stageName"),
+    sub:     document.getElementById("stageSub"),
+    fill:    document.getElementById("barFill"),
+    pct:     document.getElementById("pct"),
+    boards:  document.getElementById("boards"),
+    install: document.getElementById("installer"),
+    hint:    document.getElementById("hint"),
+    note:    document.getElementById("boardNote"),
+  };
+
+  // The board whose note the finished state should repeat.
+  let selected = null;
+
+  function showBoardNote(board, heading) {
+    if (!board || !board.note) { el.note.hidden = true; return; }
+    // textContent, not innerHTML: the note is data, and it is going to be
+    // read from a boards.json that a deploy could regenerate.
+    el.note.textContent = "";
+    const b = document.createElement("b");
+    b.textContent = heading;
+    el.note.appendChild(b);
+    el.note.appendChild(document.createTextNode(" " + board.note));
+    el.note.hidden = false;
+  }
+
+  let shownStage = -1;
+  function showStage(i) {
+    if (i === shownStage) return;
+    shownStage = i;
+    const s = STAGES[i];
+    el.pet.classList.remove("evolving");
+    void el.pet.offsetWidth;              // restart the animation
+    el.pet.classList.add("evolving");
+    // Swap at the animation's bright peak so it reads as a transformation.
+    setTimeout(() => { el.pet.src = s.img; }, 260);
+    el.name.textContent = s.name;
+    el.sub.textContent = s.sub;
+  }
+
+  function setProgress(pct) {
+    el.fill.style.width = `${pct}%`;
+    el.pct.textContent = `${Math.round(pct)}%`;
+    // 0-100% maps across the five stages.
+    showStage(Math.min(STAGES.length - 1, Math.floor(pct / (100 / STAGES.length))));
+  }
+
+  // ---- board picker, driven by boards.json so adding a board needs no HTML edit
+  const res = await fetch("boards.json").catch(() => null);
+  const data = res && res.ok ? await res.json() : null;
+
+  if (!data || !data.boards.length) {
+    el.boards.innerHTML = `<div class="note unsupported" style="grid-column:1/-1;margin:0">
+      <b>No firmware staged.</b> Run
+      <code>python scripts/build_flashes.py &lt;version&gt;</code> then
+      <code>python scripts/stage_web_flasher.py &lt;version&gt;</code>.</div>`;
+  } else {
+    for (const b of data.boards) {
+      const btn = document.createElement("button");
+      btn.className = "board";
+      btn.type = "button";
+      btn.setAttribute("aria-pressed", "false");
+      btn.innerHTML = `<b>${b.name}</b><span>${b.chip} &middot; ${(b.size / 1024).toFixed(0)} KB
+                       &middot; ${b.sha256.slice(0, 12)}</span>`;
+      btn.addEventListener("click", () => {
+        el.boards.querySelectorAll(".board").forEach(x => x.setAttribute("aria-pressed", "false"));
+        btn.setAttribute("aria-pressed", "true");
+        // Set both: the property is what the upgraded component reads, the
+        // attribute survives the element not being upgraded yet.
+        const manifest = `manifests/${b.id}.json`;
+        el.install.manifest = manifest;
+        el.install.setAttribute("manifest", manifest);
+        el.install.removeAttribute("disabled");
+        el.hint.textContent = `${b.name} selected - v${data.version}`;
+        selected = b;
+        showBoardNote(b, "Before you start.");
+        setProgress(0);
+        el.name.textContent = "Ready";
+        el.sub.textContent = "plug the board in and hit install";
+      });
+      el.boards.appendChild(btn);
+    }
+  }
+
+  // ---- drive the visuals from the installer's own progress events
+  el.install.addEventListener("state-changed", (ev) => {
+    const s = ev.detail;
+    if (s.state === "writing") {
+      el.stage.classList.add("busy");
+      if (typeof s.details?.bytesWritten === "number" && s.details?.bytesTotal) {
+        setProgress((s.details.bytesWritten / s.details.bytesTotal) * 100);
+      } else if (typeof s.details?.percentage === "number") {
+        setProgress(s.details.percentage);
+      }
+    } else if (s.state === "preparing" || s.state === "erasing") {
+      el.stage.classList.add("busy");
+      el.name.textContent = s.state === "erasing" ? "Erasing" : "Preparing";
+      el.sub.textContent = s.message || "";
+    } else if (s.state === "finished") {
+      el.stage.classList.remove("busy");
+      setProgress(100);
+      el.name.textContent = "Flash complete";
+      // A board with its own note gets that note here instead of the generic
+      // line, because for the T-RGB the generic line understates it: it is not
+      // "power-cycle to boot", it is "the screen WILL be dark until you do".
+      if (selected && selected.note) {
+        el.sub.textContent = "read the note below before you judge the result";
+        showBoardNote(selected, "After flashing.");
+      } else {
+        el.sub.textContent = "power-cycle the board to boot it";
+      }
+    } else if (s.state === "error") {
+      el.stage.classList.remove("busy");
+      el.name.textContent = "Flash failed";
+      el.sub.textContent = s.message || "see the dialog for details";
+    }
+  });
+</script>
+</body>
+</html>

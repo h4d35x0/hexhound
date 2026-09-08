@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- HoundLink mark: a hexagon (HexHound) with a link notch cut into it.
+       Drawn as plain shapes so the file is tiny, scales to any size and needs
+       no external font or raster asset. -->
+  <rect width="64" height="64" rx="14" fill="#06080d"/>
+  <path d="M32 12 L48 21 L48 39 L32 48 L16 39 L16 21 Z"
+        fill="none" stroke="#00e5ff" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="32" cy="30" r="5" fill="#3cff6e"/>
+  <path d="M32 35 L32 42" stroke="#3cff6e" stroke-width="3" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,4 @@
+# Shell scripts must keep LF endings even when checked out on Windows.
+# A CRLF shebang line fails on Linux with "bash: ...^M: bad interpreter",
+# and these scripts are how the Linux simulator gets built and packaged.
+*.sh text eol=lf

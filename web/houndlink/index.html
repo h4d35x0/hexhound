@@ -1,0 +1,2239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  Content Security Policy is doing real work here, not decoration.
+
+  `connect-src 'self'` means this page CANNOT open a fetch, XHR or WebSocket to
+  any other origin. `form-action 'none'` means it cannot POST anywhere at all.
+  So "HoundLink never uploads anything" is not a promise in a paragraph that a
+  future edit could quietly break, it is a rule the browser enforces. If someone
+  later adds an analytics call or a cloud sync, the browser blocks it and the
+  console says so.
+
+  img-src allows data: because the pet art is inlined as data URIs rather than
+  fetched, which is the same self-contained rule applied to images.
+-->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               script-src 'self' 'unsafe-inline';
+               style-src 'self' 'unsafe-inline';
+               img-src 'self' data:;
+               font-src 'self';
+               connect-src 'self';
+               form-action 'none';
+               base-uri 'none';
+               object-src 'none'">
+<title>HoundLink - HexHound companion</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg">
+<meta name="theme-color" content="#06080d">
+<style>
+  /* Palette lifted from the existing web flasher so the two pages read as one
+     product. Deliberately not a shared stylesheet: that would couple this app
+     to a file the flasher owns, and the flasher must keep working untouched. */
+  :root {
+    --bg: #06080d;
+    --panel: #0d1219;
+    --panel2: #111823;
+    --line: #1c2733;
+    --ink: #e6edf5;
+    --muted: #7d8b9c;
+    --cyan: #00e5ff;
+    --green: #3cff6e;
+    --amber: #ffb020;
+    --red: #ff423a;
+    --violet: #b98cff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: ui-monospace, "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 28px 20px 72px; }
+
+  header { border-bottom: 1px solid var(--line); padding-bottom: 18px; margin-bottom: 20px; }
+  .eyebrow { color: var(--cyan); letter-spacing: .34em; text-transform: uppercase;
+             font-size: .66rem; margin: 0 0 8px; }
+  h1 { margin: 0; font-size: clamp(1.5rem, 4vw, 2.1rem); letter-spacing: .02em; }
+  .lede { color: var(--muted); max-width: 70ch; margin: 10px 0 0; font-size: .9rem; }
+
+  /* ---- notices ---- */
+  .note { border-left: 3px solid var(--amber); background: #12100a;
+          padding: 11px 15px; margin: 14px 0; color: #d9c9a4;
+          font-size: .84rem; border-radius: 0 8px 8px 0; }
+  .note b { color: var(--amber); }
+  .note.bad { border-left-color: var(--red); background: #140a0a; color: #e3b3b0; }
+  .note.bad b { color: var(--red); }
+  .note.good { border-left-color: var(--green); background: #0a1410; color: #a9e0bd; }
+  .note.good b { color: var(--green); }
+  .note.info { border-left-color: var(--cyan); background: #071318; color: #a8ccd8; }
+  .note.info b { color: var(--cyan); }
+  .note.priv { border-left-color: var(--violet); background: #100c18; color: #cbb8e8; }
+  .note.priv b { color: var(--violet); }
+  .note ul { margin: 8px 0 0; padding-left: 20px; }
+  .note code { background: rgba(0,0,0,.35); }
+
+  /* ---- connection bar ---- */
+  .connbar {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 15px; margin-bottom: 18px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted);
+         flex: none; box-shadow: 0 0 8px currentColor; color: var(--muted); }
+  .dot.on  { background: var(--green); color: var(--green); }
+  .dot.mock{ background: var(--violet); color: var(--violet); }
+  .connbar .who { font-size: .84rem; }
+  .connbar .who b { color: var(--ink); }
+  .connbar .spacer { flex: 1 1 auto; }
+
+  /* ---- buttons ---- */
+  button {
+    font: inherit; cursor: pointer; color: var(--ink); background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 9px; padding: 8px 14px;
+    transition: border-color .15s ease, background .15s ease, opacity .15s ease;
+  }
+  button:hover:not(:disabled) { border-color: #2f4257; background: #16202c; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { border-color: var(--cyan); color: #d6f7ff; background: #08202a; }
+  button.primary:hover:not(:disabled) { background: #0b2b38; }
+  button.danger  { border-color: var(--red); color: #ffd4d1; background: #200b0a; }
+  button.danger:hover:not(:disabled) { background: #2c0f0d; }
+  button.ghost { background: transparent; }
+  button.sm { padding: 5px 10px; font-size: .8rem; }
+
+  /* ---- tabs ---- */
+  nav.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+  nav.tabs button { border-radius: 9px 9px 0 0; border-bottom-color: transparent; }
+  nav.tabs button[aria-selected="true"] {
+    border-color: var(--cyan); border-bottom-color: transparent;
+    background: #0c1a22; color: #d6f7ff;
+  }
+  nav.tabs button .n { color: var(--muted); font-size: .74rem; margin-right: 6px; }
+
+  section.screen { display: none; }
+  section.screen.active { display: block; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px 20px; margin-bottom: 16px;
+  }
+  .card > h2 { margin: 0 0 4px; font-size: .78rem; letter-spacing: .26em;
+               text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .card > p.sub { margin: 0 0 14px; color: var(--muted); font-size: .84rem; }
+
+  label.field { display: block; margin: 12px 0; font-size: .84rem; color: var(--muted); }
+  label.field span.lab { display: block; margin-bottom: 5px; }
+  input[type=text], input[type=number], select {
+    font: inherit; width: 100%; max-width: 340px; color: var(--ink);
+    background: #0a1017; border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 11px;
+  }
+  input[type=text]:focus, select:focus { outline: none; border-color: var(--cyan); }
+  input[type=file] { font: inherit; font-size: .82rem; color: var(--muted); max-width: 100%; }
+  label.check { display: flex; gap: 9px; align-items: flex-start; margin: 10px 0;
+                font-size: .84rem; color: var(--muted); cursor: pointer; }
+  label.check input { margin-top: 5px; flex: none; }
+  label.check b { color: var(--ink); font-weight: 600; }
+
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+
+  /* ---- stats ---- */
+  .stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  .stat { background: var(--panel2); border: 1px solid var(--line);
+          border-radius: 10px; padding: 12px 14px; }
+  .stat .k { color: var(--muted); font-size: .7rem; letter-spacing: .18em;
+             text-transform: uppercase; }
+  .stat .v { font-size: 1.4rem; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .meter { height: 7px; background: #0a1017; border-radius: 999px;
+           overflow: hidden; margin-top: 8px; border: 1px solid var(--line); }
+  .meter > i { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--green)); }
+
+  table.kv { width: 100%; border-collapse: collapse; font-size: .84rem; }
+  table.kv td { padding: 5px 8px; border-bottom: 1px solid var(--line); }
+  table.kv td:first-child { color: var(--muted); width: 45%; }
+  table.kv tr:last-child td { border-bottom: none; }
+
+  pre.log {
+    background: #0a1017; border: 1px solid var(--line); border-radius: 9px;
+    padding: 12px 14px; overflow: auto; max-height: 340px;
+    font-size: .78rem; color: #b8c6d4; margin: 0; white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .journal-row { display: grid; grid-template-columns: 88px 118px 1fr;
+                 gap: 10px; padding: 6px 8px; border-bottom: 1px solid var(--line);
+                 font-size: .8rem; }
+  .journal-row:last-child { border-bottom: none; }
+  .journal-row .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .journal-row .ty { color: var(--cyan); }
+
+  .findings { margin: 12px 0 0; padding: 0; list-style: none; font-size: .82rem; }
+  .findings li { padding: 6px 10px; border-left: 3px solid var(--line);
+                 background: #0a1017; margin-bottom: 5px; border-radius: 0 6px 6px 0; }
+  .findings li.err  { border-left-color: var(--red);   color: #e3b3b0; }
+  .findings li.warn { border-left-color: var(--amber); color: #d9c9a4; }
+  .findings li.ok   { border-left-color: var(--green); color: #a9e0bd; }
+
+  code { background: #101822; padding: .1em .42em; border-radius: 5px;
+         font-size: .88em; color: var(--ink); }
+  a { color: var(--cyan); }
+  footer { margin-top: 34px; padding-top: 16px; border-top: 1px solid var(--line);
+           color: var(--muted); font-size: .76rem; }
+  .hide { display: none !important; }
+  .mono-sm { font-size: .78rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">HexHound</p>
+    <h1>HoundLink</h1>
+    <p class="lede">
+      An optional companion for your HexHound. It backs up your pet, installs content
+      packs, and shows what the device has been doing. Your HexHound works completely
+      without it: this app is an accessory, never a requirement.
+    </p>
+  </header>
+
+  <!-- Browser support. Rendered by script so the message is specific rather
+       than a generic "your browser may not work". -->
+  <div id="supportNote"></div>
+
+  <div class="note priv">
+    <b>This app never uploads anything.</b>
+    Everything happens on your computer, over the USB cable. There is no account,
+    no sign-in, no cloud and no telemetry. This is enforced by a Content Security
+    Policy in the page, not just promised: the browser blocks any connection to
+    another origin. Open your developer tools and watch the network tab if you
+    would like to confirm it.
+  </div>
+
+  <div class="connbar">
+    <span class="dot" id="connDot"></span>
+    <span class="who" id="connWho">Not connected</span>
+    <span class="spacer"></span>
+    <button class="primary" id="btnConnect">Connect over USB</button>
+    <button class="ghost" id="btnDemo">Try the demo device</button>
+    <button class="ghost" id="btnDisconnect" disabled>Disconnect</button>
+  </div>
+
+  <div id="demoNote" class="note priv hide">
+    <b>Demo device.</b> You are talking to a simulated HexHound running inside this
+    page, not to real hardware. It is here so you can see every screen, and so this
+    app can be tested without a board. Nothing you do here touches a real pet.
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button data-screen="setup"   aria-selected="true"><span class="n">1</span>Setup</button>
+    <button data-screen="pet"     aria-selected="false"><span class="n">2</span>Pet</button>
+    <button data-screen="backup"  aria-selected="false"><span class="n">3</span>Backup</button>
+    <button data-screen="packs"   aria-selected="false"><span class="n">4</span>Content</button>
+    <button data-screen="journal" aria-selected="false"><span class="n">5</span>Journal</button>
+    <button data-screen="privacy" aria-selected="false"><span class="n">6</span>Privacy</button>
+  </nav>
+
+  <!-- ══════════════════ SETUP ══════════════════ -->
+  <section class="screen active" id="screen-setup">
+    <div class="card">
+      <h2>First time setup</h2>
+      <p class="sub">Name your pet and confirm the device is talking. Nothing here is required:
+         a HexHound straight out of the box is already working.</p>
+
+      <div id="setupDisconnected" class="note info">
+        <b>Connect a device to begin.</b> Use <i>Connect over USB</i> above, or
+        <i>Try the demo device</i> to look around without hardware.
+      </div>
+
+      <div id="setupBody" class="hide">
+        <table class="kv" id="deviceTable"></table>
+
+        <label class="field">
+          <span class="lab">Pet name (up to 19 characters)</span>
+          <input type="text" id="petName" maxlength="19" placeholder="HexHound">
+        </label>
+        <div class="mono-sm" id="nameHint"></div>
+
+        <div class="note priv" style="margin-top:14px">
+          <b>A name can identify you.</b> HexHound never broadcasts the pet's name to
+          strangers, deliberately, because a chosen name is often a handle and a handle
+          is an identity. It is shown on your own screen and shared only with someone
+          you deliberately pair with.
+        </div>
+
+        <div class="row">
+          <button class="primary" id="btnSaveName">Save name to device</button>
+          <span class="mono-sm" id="nameStatus"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>What this app does not do</h2>
+      <p class="sub">Stated plainly, because an accessory that quietly becomes a dependency
+         is a bug.</p>
+      <ul class="findings">
+        <li class="ok">Your HexHound hatches, evolves, patrols and plays with no app installed.</li>
+        <li class="ok">There is no account. There is nothing to sign in to.</li>
+        <li class="ok">Nothing you do here is sent anywhere. Backups are files on your disk.</li>
+        <li class="ok">If you delete this app tomorrow, your pet is unaffected.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ══════════════════ PET / STATS ══════════════════ -->
+  <section class="screen" id="screen-pet">
+    <div class="card">
+      <h2>Pet</h2>
+      <p class="sub">Read from the device. This screen only reads; it never writes.</p>
+      <div id="petEmpty" class="note info"><b>Connect a device</b> to see your pet.</div>
+      <div id="petBody" class="hide">
+        <div class="stats" id="petHeadline"></div>
+        <h2 style="margin-top:22px">Counters</h2>
+        <table class="kv" id="petCounters"></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ BACKUP ══════════════════ -->
+  <section class="screen" id="screen-backup">
+    <div class="card">
+      <h2>Back up your pet</h2>
+      <p class="sub">Reads the save off the device and writes it to a file on your computer.
+         Reading is always safe: it changes nothing.</p>
+
+      <div id="backupDisconnected" class="note info"><b>Connect a device</b> to make a backup.</div>
+
+      <div id="backupBody" class="hide">
+        <label class="check">
+          <input type="checkbox" id="includeSecret">
+          <span><b>Include the HexPass identity secret.</b>
+            Off by default, and you should usually leave it off. The secret is the
+            32 bytes your device derives its rotating public identifiers from. Anyone
+            who gets this file with the secret in it can link every identifier your
+            device has ever broadcast, or ever will. Restoring without it simply mints
+            a fresh identity on first run, which is a privacy reset rather than a loss.
+            Turn it on only if you are moving a pet to a replacement board and you
+            specifically want your existing friendships to keep working.</span>
+        </label>
+        <div class="row">
+          <button class="primary" id="btnBackup">Read pet and download backup</button>
+          <span class="mono-sm" id="backupStatus"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Restore from a backup</h2>
+      <p class="sub">Every backup is fully checked before anything is written. A restore
+         that corrupts a pet would be worse than having no restore at all, so this refuses
+         far more readily than it repairs.</p>
+
+      <label class="field">
+        <span class="lab">Backup file (.hexhound.json)</span>
+        <input type="file" id="restoreFile" accept=".json,application/json">
+      </label>
+
+      <div id="restoreReport"></div>
+
+      <div id="restoreConfirm" class="hide">
+        <div class="note bad">
+          <b>This replaces the pet currently on the device.</b>
+          The pet described below will overwrite what is on the board now. This cannot
+          be undone from inside this app. If the device currently holds a pet you care
+          about, cancel and back it up first.
+        </div>
+        <label class="check" id="overrideWrap" style="display:none">
+          <input type="checkbox" id="overrideHash">
+          <span><b>This file was edited on purpose.</b> Its integrity check does not match,
+            which normally means the file was damaged. Tick this only if you edited it
+            yourself and understand what you changed. Structural validation still has to
+            pass; that is what actually protects the pet.</span>
+        </label>
+        <div class="row">
+          <button class="danger" id="btnRestore" disabled>Overwrite the pet on the device</button>
+          <button class="ghost" id="btnCancelRestore">Cancel</button>
+          <span class="mono-sm" id="restoreStatus"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>How a restore is made safe</h2>
+      <p class="sub">Worth stating, because you are trusting it with the only copy of something
+         that took months to grow.</p>
+      <ul class="findings">
+        <li class="ok"><b>Validated before it is sent.</b> The file is parsed, its integrity
+          hash recomputed, and every field range-checked against the firmware's own rules
+          before a single byte goes to the device.</li>
+        <li class="ok"><b>A newer save is refused, not downgraded.</b> A backup written by
+          firmware newer than the board is rejected outright. Loading it would silently drop
+          fields this firmware does not know about, and silent loss is the exact failure this
+          feature exists to prevent.</li>
+        <li class="ok"><b>Never a partial write.</b> The save is transferred to a staging area,
+          the device recomputes the hash over everything it received, and only then does it
+          commit. Unplugging the cable halfway leaves the existing pet untouched.</li>
+        <li class="ok"><b>The old copy survives the write.</b> The firmware alternates between
+          two save slots and writes the one it is not currently reading, so there is a complete
+          pet on the board at every instant.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ══════════════════ CONTENT PACKS ══════════════════ -->
+  <section class="screen" id="screen-packs">
+    <div class="card">
+      <h2>Content packs</h2>
+      <p class="sub">Signed <code>.hcp</code> files that replace the pet's dialogue, quests or
+         recipes. Packs are read-only definition tables: installing one cannot touch your
+         pet's stats, XP, stage, inventory or HexPass state.</p>
+
+      <div class="note info">
+        <b>A pack takes effect at the next restart.</b> The device reads content once at boot,
+        so unplug and replug the board after installing. This is the thing people ask about
+        most, so it is worth knowing up front.
+      </div>
+
+      <label class="field">
+        <span class="lab">Pack file (.hcp)</span>
+        <input type="file" id="packFile" accept=".hcp,application/octet-stream">
+      </label>
+
+      <div id="packReport"></div>
+
+      <div class="row">
+        <button class="primary" id="btnInstallPack" disabled>Install to device</button>
+        <span class="mono-sm" id="packStatus"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Installed on the device</h2>
+      <p class="sub">One pack per kind. Installing replaces; removing restores the built-in content.</p>
+      <div id="packListEmpty" class="note info"><b>Connect a device</b> to list installed packs.</div>
+      <table class="kv" id="packList"></table>
+    </div>
+
+    <div class="card">
+      <h2>Why a bad pack cannot hurt your pet</h2>
+      <ul class="findings">
+        <li class="ok">The device checks the signature when it loads content at boot, not when
+          this app writes the file. An unsigned or damaged pack is simply ignored and the
+          built-in content is used instead.</li>
+        <li class="ok">Each kind falls back independently, so a broken quest pack does not cost
+          you your dialogue.</li>
+        <li class="ok">Removing a pack is deleting one file. There is no other state to clean up.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ══════════════════ JOURNAL ══════════════════ -->
+  <section class="screen" id="screen-journal">
+    <div class="card">
+      <h2>Journal</h2>
+      <p class="sub">The device's own log of what it has been doing. Read only, and it stays
+         on your machine.</p>
+      <div id="journalEmpty" class="note info"><b>Connect a device</b> to read the journal.</div>
+      <div id="journalBody" class="hide">
+        <div class="row" style="margin-top:0">
+          <button id="btnJournal" class="primary">Read journal</button>
+          <label class="field" style="margin:0">
+            <select id="journalCount">
+              <option value="25">last 25 entries</option>
+              <option value="50" selected>last 50 entries</option>
+              <option value="100">last 100 entries</option>
+            </select>
+          </label>
+          <button id="btnJournalSave" class="ghost" disabled>Save to file</button>
+        </div>
+        <div class="note info" style="font-size:.8rem">
+          Timestamps are milliseconds since the device last booted. HexHound has no
+          real time clock, so it cannot tell you the date and does not pretend to.
+        </div>
+        <div id="journalOut"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ PRIVACY ══════════════════ -->
+  <section class="screen" id="screen-privacy">
+    <div class="card">
+      <h2>HexPass privacy</h2>
+      <p class="sub">HexPass lets two HexHounds that pass near each other swap a small pet card.
+         It is off until you turn it on.</p>
+
+      <div id="privacyDisconnected" class="note info"><b>Connect a device</b> to see and change these settings.</div>
+
+      <div id="privacyBody" class="hide">
+        <label class="check">
+          <input type="checkbox" id="hpEnabled">
+          <span><b>HexPass enabled.</b> When this is off the device transmits nothing at all.
+            This is off on a new pet and stays off across a firmware update; only you can
+            turn it on.</span>
+        </label>
+
+        <label class="check">
+          <input type="checkbox" id="hpPrivate">
+          <span><b>Private mode.</b> Stops advertising immediately without discarding your
+            secret or your friendships. Use this when you want to go quiet for a while and
+            come back later.</span>
+        </label>
+
+        <label class="field">
+          <span class="lab">What strangers can see</span>
+          <select id="hpVis">
+            <option value="0">Friends only - rotating identifier and stage (default)</option>
+            <option value="1">Discoverable - full card readable by anyone nearby</option>
+          </select>
+        </label>
+
+        <div class="note priv" id="visCost"></div>
+
+        <div class="row">
+          <button class="primary" id="btnSavePrivacy">Save privacy settings</button>
+          <span class="mono-sm" id="privacyStatus"></span>
+        </div>
+
+        <h2 style="margin-top:26px">Encounters</h2>
+        <table class="kv" id="hpStats"></table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Wipe HexPass data on the device</h2>
+      <p class="sub">Erases every encounter, every block entry, and the identity secret itself.</p>
+      <div class="note bad">
+        <b>This cannot be undone.</b> Erasing the secret is what makes a wipe genuine rather
+        than cosmetic: every identifier your device broadcast in the past becomes unlinkable
+        to the new one it will generate. Your friendships are erased along with it, because
+        they are derived from that secret. Your pet, its stats, XP, stage and inventory are
+        <i>not</i> touched.
+      </div>
+      <label class="field">
+        <span class="lab">Type WIPE to confirm</span>
+        <input type="text" id="wipeConfirm" placeholder="WIPE" autocomplete="off">
+      </label>
+      <div class="row">
+        <button class="danger" id="btnWipe" disabled>Wipe HexPass data</button>
+        <span class="mono-sm" id="wipeStatus"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>What is broadcast, and what never is</h2>
+      <ul class="findings">
+        <li class="ok"><b>Never transmitted:</b> your device's MAC address, any network or
+          Bluetooth address it has scanned, any location, your pet's name, or any text you
+          can type. None of these exist anywhere in the transmitted card.</li>
+        <li class="ok"><b>The identifier rotates</b> and the radio address rotates with it, in
+          the same instant, so sightings cannot be chained together into a trail.</li>
+        <li class="warn"><b>Presence is still observable.</b> Rotation stops sightings being
+          linked; it cannot hide that a HexHound is nearby. In a room with exactly one
+          HexHound, an observer knows whose it is. That is inherent to any proximity feature
+          and we would rather say so than imply otherwise.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    HoundLink is optional. Your HexHound needs no app, no account and no network.
+    Backups are ordinary files on your disk, so keep them somewhere you trust.
+    <span id="verLine"></span>
+  </footer>
+
+</div>
+
+<script>
+"use strict";
+/* ═══════════════════════════════════════════════════════════════════════════
+   HoundLink - HexHound companion app
+
+   Everything is inline and same origin on purpose. No CDN, no external font,
+   no analytics, no telemetry, no network calls of any kind. The Content
+   Security Policy in the document head enforces that rather than trusting this
+   comment.
+
+   Layout of this file:
+     1  Firmware constants          - mirrored from src/, single source in here
+     2  Small utilities             - hex, base64, CRC32, SHA-256
+     3  Pet save validator          - the safety net for restore
+     4  Backup file format          - wrapper, hashing, redaction
+     5  HL1 protocol                - framing shared with OTA and content packs
+     6  Transports                  - Web Serial, and an in-page demo device
+     7  Content pack parsing        - .hcp envelope + optional Ed25519 check
+     8  UI
+   ═════════════════════════════════════════════════════════════════════════ */
+
+const APP_VERSION = "0.1.0";
+
+/* ── 1. Firmware constants ────────────────────────────────────────────────
+   Mirrored from src/config.h, src/pet/pet_core.h and src/social/hexpass_types.h.
+   They are duplicated here because this app cannot include a C header, which
+   means they can drift. Any change to the firmware side must be repeated here,
+   and docs/open-work.md item P records that obligation. The validator is only as
+   good as these numbers.                                                     */
+const FW = {
+  SCHEMA: 3,                  // PET_SCHEMA_VERSION
+  NAME_MAX: 19,               // char name[20], minus the terminator
+  STAGE_MIN: 1, STAGE_MAX: 5, // STAGE_EGG .. STAGE_SENTINEL
+  STAT_MIN: 0, STAT_MAX: 100,
+  TRAIT_COUNT: 6,
+  FORM_COUNT: 7,              // FORM_UNSET .. FORM_PACKMASTER inclusive
+  FORM_BEHAVIOUR_COUNT: 6,
+  ITEM_TYPE_COUNT: 24,
+  DEN_SLOT_COUNT: 8,
+  MAX_SEEN_WIFI: 64, SEEN_WIFI_CHARS: 32,
+  MAX_SEEN_BLE: 64,  SEEN_BLE_CHARS: 17,
+  HEXPASS: {
+    SECRET_BYTES: 32, FRIEND_BYTES: 8,
+    MAX_ENCOUNTERS: 16, MAX_BLOCKED: 8,
+    VIS_COUNT: 2, BADGE_COUNT: 8, GREETING_COUNT: 8,
+    ENC_STAGE_MIN: 1, ENC_STAGE_MAX: 5, ENC_FORM_MAX: 6,
+  },
+};
+
+const STAGE_NAMES = ["", "Egg", "Packet Pup", "Beacon Beast", "Gremlin Mode", "Sentinel"];
+const FORM_NAMES  = ["Undecided", "Pathfinder", "Guardian", "Archivist", "Cipher", "Gremlin", "Packmaster"];
+const TRAIT_NAMES = ["Curious", "Protective", "Chaotic", "Sleepy", "Greedy", "Brave"];
+
+// Content pack kinds and the firmware's size caps.
+// NOTE: P3-W1 stated the caps as "6144 bytes for dialogue and quests, 4096 for
+// recipes" without saying whether that bounds the CBOR body or the whole file.
+// Those differ by the 80 byte envelope. We check the body against the cap and
+// warn near the boundary rather than silently choosing a reading; the question
+// is flagged in docs/open-work.md item P.
+const PACK_KINDS = {
+  1: { name: "Dialogue", path: "/content/dialogue.hcp", cap: 6144 },
+  2: { name: "Quests",   path: "/content/quests.hcp",   cap: 6144 },
+  3: { name: "Recipes",  path: "/content/recipes.hcp",  cap: 4096 },
+};
+
+// Ed25519 public keys this app will accept for the courtesy pre-check.
+// EMPTY ON PURPOSE. The firmware's src/content/content_pubkey.h does not exist
+// in this tree yet, and the key it will carry first is a development key. An
+// empty list means the app says "the device will verify this" instead of
+// claiming a verification it did not perform. Never fetch a key over the
+// network: that would defeat the whole offline posture.
+const TRUSTED_KEYS = [];
+
+/* ── 2. Utilities ─────────────────────────────────────────────────────────── */
+
+const $ = (id) => document.getElementById(id);
+
+function bytesToHex(bytes) {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+function isHex(str, byteLen) {
+  return typeof str === "string" && str.length === byteLen * 2 && /^[0-9a-fA-F]+$/.test(str);
+}
+function bytesToBase64(bytes) {
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+function base64ToBytes(b64) {
+  const s = atob(b64);
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return ((c ^ 0xFFFFFFFF) >>> 0);
+}
+
+async function sha256Hex(input) {
+  const data = typeof input === "string" ? new TextEncoder().encode(input) : input;
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return bytesToHex(new Uint8Array(digest));
+}
+
+// Deterministic serialisation used for the backup integrity hash.
+// Keys are sorted at every level so the same pet always hashes the same way,
+// regardless of the order the device happened to emit them in. Without this the
+// hash would depend on key order and a harmless reserialisation would look like
+// corruption.
+function canonicalJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return "[" + value.map(canonicalJson).join(",") + "]";
+  const keys = Object.keys(value).sort();
+  return "{" + keys.map((k) => JSON.stringify(k) + ":" + canonicalJson(value[k])).join(",") + "}";
+}
+
+function downloadFile(name, contents, mime) {
+  const blob = contents instanceof Blob ? contents : new Blob([contents], { type: mime || "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  // Revoke on a later turn so the download has certainly started.
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* ── 3. Pet save validator ────────────────────────────────────────────────
+   This is the part that must not be wrong. It runs on a parsed backup BEFORE
+   anything is transmitted, and mirrors what src/pet/pet_core.cpp loadFrom()
+   would do with the same input.
+
+   Two severities, and the distinction is deliberate:
+
+     ERROR   the save is structurally wrong, or accepting it would silently
+             lose or corrupt something. Blocks the restore. No override.
+     WARNING the firmware itself would clamp or drop this safely on load, so
+             the restore can proceed, but the user is told exactly what will
+             change rather than discovering it afterwards.
+
+   The rule for choosing between them: if the firmware's own loader handles it
+   gracefully, it is a warning. If it would fault, mislead, or lose data, it is
+   an error. We never "repair" a save silently.                               */
+
+function validatePetSave(pet) {
+  const errors = [];
+  const warnings = [];
+  const err  = (m) => errors.push(m);
+  const warn = (m) => warnings.push(m);
+
+  if (pet === null || typeof pet !== "object" || Array.isArray(pet)) {
+    return { errors: ["The pet data is not a JSON object."], warnings: [], summary: null };
+  }
+
+  // ── schema ──────────────────────────────────────────────────────────────
+  // Absent means version 1, exactly as the firmware treats it.
+  const schema = (pet.schema === undefined) ? 1 : pet.schema;
+  if (!Number.isInteger(schema) || schema < 1) {
+    err(`Schema version is not a whole number (found ${JSON.stringify(pet.schema)}).`);
+  } else if (schema > FW.SCHEMA) {
+    // Refused rather than downgraded. The firmware's migrate() would stamp this
+    // down to its own version and every field it does not know about would be
+    // dropped on the next save, which is silent data loss.
+    err(`This backup was written by newer firmware (save schema ${schema}, this app understands ${FW.SCHEMA}). ` +
+        `Restoring it would silently discard whatever the newer firmware added. Update HoundLink instead.`);
+  } else if (schema < FW.SCHEMA) {
+    warn(`Older save (schema ${schema}). The device will upgrade it to schema ${FW.SCHEMA} on load. ` +
+         `HexPass stays switched off through the upgrade, which is intended.`);
+  }
+
+  // ── name ────────────────────────────────────────────────────────────────
+  if (pet.name !== undefined) {
+    if (typeof pet.name !== "string") {
+      err("Pet name is not text.");
+    } else if (pet.name.length > FW.NAME_MAX) {
+      warn(`Pet name is ${pet.name.length} characters and will be shortened to ${FW.NAME_MAX} ` +
+           `("${pet.name.slice(0, FW.NAME_MAX)}").`);
+    }
+  }
+
+  // ── stage ───────────────────────────────────────────────────────────────
+  // Out of range is an ERROR here even though the firmware falls back to EGG,
+  // because that fallback would hand somebody back an egg in place of a fully
+  // grown Sentinel. Losing a pet's whole life to a silent clamp is precisely
+  // the outcome this feature exists to prevent.
+  if (pet.stage !== undefined) {
+    if (!Number.isInteger(pet.stage) || pet.stage < FW.STAGE_MIN || pet.stage > FW.STAGE_MAX) {
+      err(`Stage ${JSON.stringify(pet.stage)} is not a real stage (expected ${FW.STAGE_MIN} to ${FW.STAGE_MAX}). ` +
+          `The device would silently reset this pet to an egg.`);
+    }
+  }
+
+  // ── stats ───────────────────────────────────────────────────────────────
+  for (const key of ["hunger", "mood", "energy", "trust", "mischief", "health"]) {
+    const v = pet[key];
+    if (v === undefined) continue;
+    if (!Number.isInteger(v)) { err(`Stat "${key}" is not a whole number.`); continue; }
+    if (v < FW.STAT_MIN || v > FW.STAT_MAX) {
+      warn(`Stat "${key}" is ${v}; the device clamps it to ${FW.STAT_MIN}..${FW.STAT_MAX}.`);
+    }
+  }
+  for (const key of ["xp", "masteryXP", "roamPoints", "stepCount", "bestGameScore"]) {
+    const v = pet[key];
+    if (v === undefined) continue;
+    if (!Number.isInteger(v) || v < 0) err(`"${key}" must be a whole number of zero or more.`);
+    else if (v > 0xFFFFFFFF) err(`"${key}" is larger than the device can store.`);
+  }
+
+  // ── traits ──────────────────────────────────────────────────────────────
+  for (const key of ["trait0", "trait1"]) {
+    const v = pet[key];
+    if (v === undefined) continue;
+    if (!Number.isInteger(v) || v < 0 || v >= FW.TRAIT_COUNT) {
+      err(`"${key}" is ${JSON.stringify(v)}, which is not a known trait (0 to ${FW.TRAIT_COUNT - 1}). ` +
+          `The device indexes a table with this and would read past the end of it.`);
+    }
+  }
+
+  // ── form ────────────────────────────────────────────────────────────────
+  if (pet.form !== undefined) {
+    if (!Number.isInteger(pet.form) || pet.form < 0 || pet.form >= FW.FORM_COUNT) {
+      err(`Form ${JSON.stringify(pet.form)} is not a known form (0 to ${FW.FORM_COUNT - 1}).`);
+    }
+  }
+
+  // ── fixed-size arrays ───────────────────────────────────────────────────
+  // The firmware reads these by index against its own bounds, so a long array
+  // cannot overflow it. It is still a warning, because the tail is dropped and
+  // the user should know their inventory is about to be truncated.
+  const checkArray = (key, max, itemCheck) => {
+    const v = pet[key];
+    if (v === undefined) return;
+    if (!Array.isArray(v)) { err(`"${key}" should be a list.`); return; }
+    if (v.length > max) warn(`"${key}" has ${v.length} entries; the device keeps the first ${max}.`);
+    for (let i = 0; i < Math.min(v.length, max); i++) {
+      const problem = itemCheck(v[i], i);
+      if (problem) { err(`"${key}"[${i}]: ${problem}`); return; }
+    }
+  };
+  const nonNegInt = (v) => (Number.isInteger(v) && v >= 0) ? null : "must be a whole number of zero or more";
+
+  checkArray("behaviour", FW.FORM_BEHAVIOUR_COUNT, nonNegInt);
+  checkArray("items", FW.ITEM_TYPE_COUNT, nonNegInt);
+  checkArray("denSlots", FW.DEN_SLOT_COUNT, (v) => {
+    if (!Number.isInteger(v) || v < 0) return "must be a whole number of zero or more";
+    if (v >= FW.ITEM_TYPE_COUNT) return `item id ${v} does not exist (0 clears the slot, real ids are 1 to ${FW.ITEM_TYPE_COUNT - 1})`;
+    return null;
+  });
+  checkArray("seenWifi", FW.MAX_SEEN_WIFI, (v) =>
+    typeof v === "string" ? (v.length > FW.SEEN_WIFI_CHARS ? null : null) : "must be text");
+  checkArray("seenBle", FW.MAX_SEEN_BLE, (v) =>
+    typeof v === "string" ? null : "must be text");
+
+  // ── HexPass ─────────────────────────────────────────────────────────────
+  const hp = pet.hexpass;
+  if (hp !== undefined) {
+    if (hp === null || typeof hp !== "object" || Array.isArray(hp)) {
+      err('"hexpass" should be an object.');
+    } else {
+      if (hp.secret !== undefined) {
+        if (!isHex(hp.secret, FW.HEXPASS.SECRET_BYTES)) {
+          // The firmware treats a malformed secret as "no identity", which is
+          // safe, so this is a warning and not an error. Said out loud because
+          // it changes behaviour the owner can observe.
+          warn(`The HexPass secret is not ${FW.HEXPASS.SECRET_BYTES * 2} hex characters, so the device will ` +
+               `treat this pet as having no identity and generate a fresh one. Existing friendships will not work.`);
+        }
+      } else {
+        warn("This backup carries no HexPass secret, so the device will generate a fresh identity on first run. " +
+             "That is the normal result of a redacted backup and is usually what you want.");
+      }
+      if (hp.enabled !== undefined && typeof hp.enabled !== "boolean") err('"hexpass.enabled" should be true or false.');
+      if (hp.private !== undefined && typeof hp.private !== "boolean") err('"hexpass.private" should be true or false.');
+      if (hp.vis !== undefined) {
+        if (!Number.isInteger(hp.vis) || hp.vis < 0 || hp.vis >= FW.HEXPASS.VIS_COUNT) {
+          warn(`HexPass visibility ${JSON.stringify(hp.vis)} is unknown; the device falls back to the more private ` +
+               `"friends only" setting.`);
+        }
+      }
+      if (hp.badge !== undefined && (!Number.isInteger(hp.badge) || hp.badge < 0 || hp.badge >= FW.HEXPASS.BADGE_COUNT)) {
+        warn(`HexPass badge ${JSON.stringify(hp.badge)} is out of range and will be cleared.`);
+      }
+      if (hp.greeting !== undefined && (!Number.isInteger(hp.greeting) || hp.greeting < 0 || hp.greeting >= FW.HEXPASS.GREETING_COUNT)) {
+        warn(`HexPass greeting ${JSON.stringify(hp.greeting)} is out of range and will be reset.`);
+      }
+      if (hp.enc !== undefined) {
+        if (!Array.isArray(hp.enc)) err('"hexpass.enc" should be a list.');
+        else {
+          if (hp.enc.length > FW.HEXPASS.MAX_ENCOUNTERS) {
+            warn(`${hp.enc.length} encounters recorded; the device keeps the first ${FW.HEXPASS.MAX_ENCOUNTERS}.`);
+          }
+          let dropped = 0;
+          hp.enc.slice(0, FW.HEXPASS.MAX_ENCOUNTERS).forEach((row) => {
+            if (row === null || typeof row !== "object" || !isHex(row.f, FW.HEXPASS.FRIEND_BYTES)) dropped++;
+          });
+          if (dropped > 0) warn(`${dropped} encounter record(s) have no usable friend id and will be dropped.`);
+        }
+      }
+      if (hp.blk !== undefined) {
+        if (!Array.isArray(hp.blk)) err('"hexpass.blk" should be a list.');
+        else if (hp.blk.length > FW.HEXPASS.MAX_BLOCKED) {
+          warn(`${hp.blk.length} blocked ids; the device keeps the first ${FW.HEXPASS.MAX_BLOCKED}.`);
+        }
+      }
+    }
+  }
+
+  // ── summary shown to the user before they commit ────────────────────────
+  const summary = {
+    name: typeof pet.name === "string" ? pet.name : "(unnamed)",
+    stage: Number.isInteger(pet.stage) ? pet.stage : 1,
+    xp: Number.isInteger(pet.xp) ? pet.xp : 0,
+    schema,
+    hatched: pet.hatched === true,
+    form: Number.isInteger(pet.form) ? pet.form : 0,
+    hasSecret: !!(hp && isHex(hp.secret, FW.HEXPASS.SECRET_BYTES)),
+    encounters: (hp && Array.isArray(hp.enc)) ? hp.enc.length : 0,
+  };
+
+  return { errors, warnings, summary };
+}
+
+/* ── 4. Backup file format ────────────────────────────────────────────────
+   A thin wrapper around the device's own save JSON. The pet object is stored
+   as-is so a human can read and, at their own risk, edit it. `sha256` is taken
+   over the canonical form of that object, so accidental corruption is caught
+   while a deliberate edit remains possible behind an explicit override.       */
+
+const BACKUP_MAGIC = "hexhound-backup";
+const BACKUP_FORMAT = 1;
+
+async function buildBackup(petObject, meta, includeSecret) {
+  // Redaction happens on a copy. The live pet object is never mutated, because
+  // the same object is also driving the on-screen stats.
+  const pet = JSON.parse(JSON.stringify(petObject));
+  let redacted = false;
+  if (!includeSecret && pet.hexpass && pet.hexpass.secret !== undefined) {
+    delete pet.hexpass.secret;
+    redacted = true;
+  }
+  const hash = await sha256Hex(canonicalJson(pet));
+  const wrapper = {
+    [BACKUP_MAGIC]: BACKUP_FORMAT,
+    app: `HoundLink ${APP_VERSION}`,
+    created: new Date().toISOString(),
+    device: meta || null,
+    schema: pet.schema === undefined ? 1 : pet.schema,
+    secretRedacted: redacted,
+    sha256: hash,
+    pet,
+  };
+  return JSON.stringify(wrapper, null, 2) + "\n";
+}
+
+// Parses and fully checks a backup file. Returns a report; it never writes.
+async function inspectBackup(text) {
+  const report = { fatal: null, errors: [], warnings: [], summary: null, pet: null, hashOk: false };
+
+  let doc;
+  try {
+    doc = JSON.parse(text);
+  } catch (e) {
+    report.fatal = `This file is not valid JSON, so it cannot be a HoundLink backup. (${e.message})`;
+    return report;
+  }
+  if (doc === null || typeof doc !== "object" || Array.isArray(doc)) {
+    report.fatal = "This file does not contain a backup object.";
+    return report;
+  }
+  const format = doc[BACKUP_MAGIC];
+  if (format === undefined) {
+    report.fatal = "This is not a HoundLink backup file. It has no backup marker. " +
+                   "If you exported the raw save from an SD card, that is a different file and cannot be restored here.";
+    return report;
+  }
+  if (!Number.isInteger(format) || format > BACKUP_FORMAT) {
+    report.fatal = `This backup uses format version ${JSON.stringify(format)}, which this app does not understand. Update HoundLink.`;
+    return report;
+  }
+  if (doc.pet === null || typeof doc.pet !== "object" || Array.isArray(doc.pet)) {
+    report.fatal = "The backup has no pet data in it.";
+    return report;
+  }
+
+  report.pet = doc.pet;
+  report.meta = { app: doc.app, created: doc.created, device: doc.device, secretRedacted: doc.secretRedacted === true };
+
+  // Integrity. A mismatch is reported honestly rather than repaired.
+  if (typeof doc.sha256 === "string") {
+    const actual = await sha256Hex(canonicalJson(doc.pet));
+    report.hashOk = (actual.toLowerCase() === doc.sha256.toLowerCase());
+    report.expectedHash = doc.sha256;
+    report.actualHash = actual;
+  } else {
+    report.hashOk = false;
+    report.noHash = true;
+  }
+
+  const v = validatePetSave(doc.pet);
+  report.errors = v.errors;
+  report.warnings = v.warnings;
+  report.summary = v.summary;
+  return report;
+}
+
+/* ── 5. HL1 protocol ──────────────────────────────────────────────────────
+   A line oriented framing over the USB serial console, intended to be shared
+   by this app, firmware OTA and content pack install so the device carries one
+   protocol rather than three.
+
+     host   -> HL1 <VERB> <json>\n
+     device -> HL1 OK <json>
+               HL1 ERR <code> <message>
+               HL1 DATA <base64>            (repeatable, ends with HL1 OK)
+
+   Binary payloads travel as indexed base64 chunks, each with a CRC32, and the
+   whole payload is hashed with SHA-256 and verified by the device BEFORE it
+   commits anything. A transfer that stops halfway commits nothing.
+
+   STATUS: PROPOSED, not agreed. See docs/open-work.md item P. No firmware in this
+   tree implements it yet; there is no serial command handler at all today.    */
+
+const HL1 = {
+  PREFIX: "HL1",
+  CHUNK_BYTES: 512,       // raw bytes per chunk, before base64 expansion
+};
+
+class ProtocolError extends Error {
+  constructor(code, message) { super(message); this.code = code; }
+}
+
+/* ── 6. Transports ────────────────────────────────────────────────────────── */
+
+// Common surface both transports present to the UI.
+class DeviceSession {
+  constructor(transport, kind) { this.transport = transport; this.kind = kind; }
+  get isDemo() { return this.kind === "demo"; }
+  request(verb, args, opts) { return this.transport.request(verb, args, opts); }
+  close() { return this.transport.close(); }
+}
+
+/* -- 6a. Web Serial ------------------------------------------------------- */
+
+// Baud rate. 921600, and the reason matters because the obvious 115200 is
+// actively wrong on one board:
+//
+//   * T-Dongle S3, T-Display S3, both Waveshare 1.47 boards and the T-Dongle C5
+//     use NATIVE USB CDC. There is no UART behind it, so the baud number is a
+//     fiction the device ignores and you get USB bulk speed regardless.
+//   * The Waveshare ESP32-S3-LCD-1.28 round board has NO native USB. It sits
+//     behind a CH343P USB-to-UART bridge, so its baud is real. At 115200 a
+//     1.2 MB firmware image takes about 105 seconds; at 921600 it takes about
+//     13. The CH343P and the ESP32 UART both handle 921600 comfortably.
+//
+// So this number is harmless on five boards and load-bearing on the sixth.
+// Confirmed with the OTA workstream; see docs/open-work.md item P.
+const SERIAL_BAUD = 921600;
+
+class SerialTransport {
+  constructor(port) {
+    this.port = port;
+    this.reader = null;
+    this.writer = null;
+    // Byte oriented, not text. An earlier version used TextDecoderStream, which
+    // is tidier for a line protocol but makes raw binary impossible, and the
+    // firmware OTA path needs exactly that (HL1 BIN <len> followed by len raw
+    // bytes). Decoding lines by hand here keeps one transport that can carry
+    // both instead of two that each do half the job.
+    this.buffer = new Uint8Array(0);
+    this.queue = [];        // pending line resolvers
+    this.closed = false;
+  }
+
+  static isSupported() { return ("serial" in navigator); }
+
+  async open(baudRate) {
+    await this.port.open({ baudRate: baudRate || SERIAL_BAUD });
+    this.writer = this.port.writable.getWriter();
+    this.reader = this.port.readable.getReader();
+    this._pump();
+  }
+
+  _append(chunk) {
+    const merged = new Uint8Array(this.buffer.length + chunk.length);
+    merged.set(this.buffer, 0);
+    merged.set(chunk, this.buffer.length);
+    this.buffer = merged;
+  }
+
+  async _pump() {
+    try {
+      for (;;) {
+        const { value, done } = await this.reader.read();
+        if (done) break;
+        this._append(value);
+        for (;;) {
+          const idx = this.buffer.indexOf(0x0A);       // '\n'
+          if (idx < 0) break;
+          let end = idx;
+          if (end > 0 && this.buffer[end - 1] === 0x0D) end--;   // strip '\r'
+          const line = new TextDecoder().decode(this.buffer.slice(0, end));
+          this.buffer = this.buffer.slice(idx + 1);
+          const waiter = this.queue.shift();
+          if (waiter) waiter.resolve(line);
+        }
+      }
+    } catch (e) {
+      const waiter = this.queue.shift();
+      if (waiter) waiter.reject(e);
+    }
+  }
+
+  _nextLine(timeoutMs) {
+    return new Promise((resolve, reject) => {
+      const entry = { resolve, reject };
+      this.queue.push(entry);
+      setTimeout(() => {
+        const i = this.queue.indexOf(entry);
+        if (i >= 0) {
+          this.queue.splice(i, 1);
+          reject(new ProtocolError("TIMEOUT",
+            "The device did not answer. It may be running firmware without HoundLink support."));
+        }
+      }, timeoutMs || 4000);
+    });
+  }
+
+  // Raw binary escape hatch, agreed with the OTA workstream. Sends
+  // `HL1 BIN <len>\n` and then exactly len bytes with no encoding. Base64 costs
+  // 33% and is fine for the small JSON-ish payloads this app moves, but a
+  // firmware image is ~1.2 MB and that overhead is not worth paying.
+  //
+  // Not used by any of HoundLink's own five features. It exists so the OTA
+  // workstream has one transport to build against rather than inventing a
+  // second one.
+  async sendRaw(verb, args, payload, opts) {
+    const header = `${HL1.PREFIX} ${verb} ${JSON.stringify(args || {})}\n`;
+    await this.writer.write(new TextEncoder().encode(header));
+    const bin = `${HL1.PREFIX} BIN ${payload.length}\n`;
+    await this.writer.write(new TextEncoder().encode(bin));
+    // Written in slices so a caller can drive a progress bar and so a very
+    // large image does not sit in one enormous write.
+    const step = 4096;
+    for (let off = 0; off < payload.length; off += step) {
+      await this.writer.write(payload.slice(off, Math.min(off + step, payload.length)));
+      if (opts && opts.onProgress) opts.onProgress(Math.min(off + step, payload.length), payload.length);
+    }
+    return this._awaitReply(opts);
+  }
+
+  async request(verb, args, opts) {
+    const line = `${HL1.PREFIX} ${verb} ${JSON.stringify(args || {})}\n`;
+    await this.writer.write(new TextEncoder().encode(line));
+    return this._awaitReply(opts);
+  }
+
+  async _awaitReply(opts) {
+    const collected = [];
+    for (;;) {
+      const resp = await this._nextLine(opts && opts.timeoutMs);
+      if (!resp.startsWith(HL1.PREFIX + " ")) continue;   // ignore ordinary log output
+      const rest = resp.slice(HL1.PREFIX.length + 1);
+      if (rest.startsWith("DATA ")) { collected.push(rest.slice(5)); continue; }
+      if (rest.startsWith("OK")) {
+        const payload = rest.slice(2).trim();
+        return { ok: JSON.parse(payload || "{}"), data: collected };
+      }
+      if (rest.startsWith("ERR ")) {
+        const m = rest.slice(4);
+        const sp = m.indexOf(" ");
+        throw new ProtocolError(sp < 0 ? m : m.slice(0, sp), sp < 0 ? m : m.slice(sp + 1));
+      }
+    }
+  }
+
+  async close() {
+    this.closed = true;
+    // Locks must be released before the port will close, and each step is
+    // guarded because a device unplugged mid-session throws on all of them.
+    try { if (this.reader) { await this.reader.cancel(); this.reader.releaseLock(); } } catch (e) {}
+    try { if (this.writer) { this.writer.releaseLock(); } } catch (e) {}
+    try { await this.port.close(); } catch (e) {}
+  }
+}
+
+/* -- 6b. Demo device -------------------------------------------------------
+   An in-page HexHound that speaks HL1. It exists so every screen can be seen
+   and exercised without hardware, and because Web Serial cannot be driven
+   without a human picking a port, so this is the only way any of this gets
+   automated testing at all.
+
+   It is deliberately labelled everywhere it surfaces. A demo device that could
+   be mistaken for a real one would be a worse bug than not having one.        */
+
+function makeDemoPet() {
+  return {
+    schema: 3,
+    name: "R00tPup",
+    stage: 3,
+    hunger: 62, mood: 78, energy: 44, xp: 1840, trust: 71, mischief: 23, health: 96,
+    trait0: 0, trait1: 5,
+    interactions: 214, wifiScans: 96, usbConnects: 12,
+    seenWifi: ["DEFCON-Open", "hotel-guest", "eduroam", "linksys"],
+    seenBle: ["a4:c1:38:11:22:33", "d0:03:4b:aa:bb:cc"],
+    masteryXP: 620, masteryRank: 2,
+    threatOpenCount: 7, threatDuplicateCount: 3, threatTrackerCount: 2,
+    missionsCompleted: 9, perkMask: 3, saveSeq: 431, hatched: true,
+    idleTicks: 12, hibernating: false,
+    checkIns: 31, questsCompleted: 18, bestGameScore: 4120,
+    questDay: 27, dayTicks: 900, lastReportDay: 25,
+    form: 1,
+    behaviour: [41, 12, 9, 4, 16, 6],
+    items: [0, 3, 1, 0, 2, 0, 0, 5, 0, 0, 1, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1],
+    denSlots: [1, 7, 0, 15, 0, 0, 2, 0],
+    roamPoints: 1290, stepCount: 8642, roamSessions: 22,
+    hexpass: {
+      secret: "3f1c9a04b7e2d85610fa47c3298bd6e0114c7a9df3b25e8607cd41a92f0b6d38",
+      enabled: true, private: false, vis: 0,
+      epoch: 4127, seq: 88, day: 27, today: 3,
+      badge: 2, greeting: 4,
+      enc: [
+        { f: "9a1b2c3d4e5f6071", ep: 4120, sq: 80, n: 3, d: 27, t: 1, s: 4, fm: 2, b: 1, g: 0 },
+        { f: "1122334455667788", ep: 4126, sq: 87, n: 1, d: 27, t: 1, s: 2, fm: 0, b: 0, g: 3 },
+      ],
+      blk: ["ffeeddccbbaa9988"],
+    },
+  };
+}
+
+const DEMO_JOURNAL = [
+  [102340, "BOOT", "power-on", "slot=A"],
+  [140912, "PATROL", "wifi scan", "14 networks"],
+  [141880, "THREAT", "open network", "DEFCON-Open"],
+  [190455, "QUEST", "completed", "Signal Sweep"],
+  [204100, "FEED", "hunger +12", ""],
+  [263770, "HEXPASS", "encounter", "friend 9a1b2c3d"],
+  [301200, "GAME", "best score", "4120"],
+  [355900, "PATROL", "ble scan", "6 devices"],
+  [356400, "THREAT", "tracker lead", "a4:c1:38"],
+  [401110, "EVOLVE", "stage 3", "Beacon Beast"],
+  [455020, "ROAM", "session end", "312 pts"],
+  [502330, "SAVE", "slot=B", "seq=431"],
+];
+
+class DemoTransport {
+  constructor() {
+    this.pet = makeDemoPet();
+    this.packs = { 1: { size: 2210, keyId: "2bd959ce" } };  // one dialogue pack present
+    this.staging = null;
+  }
+
+  async request(verb, args) {
+    // A little latency so progress UI behaves like it will against real hardware.
+    await new Promise((r) => setTimeout(r, 30));
+    args = args || {};
+    switch (verb) {
+      case "HELLO":
+        return { ok: { proto: 1, app: "HexHound", fw: "0.2.0-demo", board: "demo-device",
+                       schema: FW.SCHEMA, name: this.pet.name }, data: [] };
+
+      case "PET.GET": {
+        const json = JSON.stringify(this.pet);
+        const bytes = new TextEncoder().encode(json);
+        const chunks = [];
+        for (let i = 0; i < bytes.length; i += HL1.CHUNK_BYTES) {
+          chunks.push(bytesToBase64(bytes.slice(i, i + HL1.CHUNK_BYTES)));
+        }
+        return { ok: { len: bytes.length, chunks: chunks.length }, data: chunks };
+      }
+
+      case "PET.NAME":
+        if (typeof args.name !== "string") throw new ProtocolError("BADARG", "name must be text");
+        this.pet.name = args.name.slice(0, FW.NAME_MAX);
+        return { ok: { name: this.pet.name }, data: [] };
+
+      case "PET.PUT.BEGIN":
+        this.staging = { len: args.len, sha256: args.sha256, parts: [] };
+        return { ok: { session: 1, chunk: HL1.CHUNK_BYTES }, data: [] };
+
+      case "PET.PUT.CHUNK": {
+        if (!this.staging) throw new ProtocolError("NOSESSION", "no transfer in progress");
+        const bytes = base64ToBytes(args.b64);
+        if (crc32(bytes) !== args.crc) throw new ProtocolError("CRC", `chunk ${args.i} was corrupted in transit`);
+        this.staging.parts[args.i] = bytes;
+        return { ok: { i: args.i }, data: [] };
+      }
+
+      case "PET.PUT.COMMIT": {
+        // The whole point of the staging area: verify everything, and only then
+        // replace the live pet. A failure here leaves the existing pet intact.
+        if (!this.staging) throw new ProtocolError("NOSESSION", "no transfer in progress");
+        const total = this.staging.parts.reduce((n, p) => n + (p ? p.length : 0), 0);
+        if (total !== this.staging.len) {
+          this.staging = null;
+          throw new ProtocolError("SHORT", "the device did not receive the whole save, nothing was written");
+        }
+        const joined = new Uint8Array(total);
+        let off = 0;
+        for (const p of this.staging.parts) { joined.set(p, off); off += p.length; }
+        const digest = await sha256Hex(joined);
+        if (digest !== this.staging.sha256) {
+          this.staging = null;
+          throw new ProtocolError("HASH", "the save did not match its checksum, nothing was written");
+        }
+        let parsed;
+        try { parsed = JSON.parse(new TextDecoder().decode(joined)); }
+        catch (e) { this.staging = null; throw new ProtocolError("PARSE", "the save was not valid JSON, nothing was written"); }
+        this.pet = parsed;
+        this.staging = null;
+        return { ok: { committed: true, slot: "B" }, data: [] };
+      }
+
+      case "JOURNAL.GET": {
+        const n = Math.min(args.n || 50, DEMO_JOURNAL.length);
+        const lines = DEMO_JOURNAL.slice(-n).map((r) => r.join("|")).join("\n");
+        const bytes = new TextEncoder().encode(lines);
+        return { ok: { len: bytes.length }, data: [bytesToBase64(bytes)] };
+      }
+
+      case "PACK.LIST": {
+        const list = Object.keys(this.packs).map((k) => ({
+          kind: Number(k), size: this.packs[k].size, keyId: this.packs[k].keyId,
+        }));
+        return { ok: { packs: list }, data: [] };
+      }
+
+      case "PACK.PUT.BEGIN":
+        this.staging = { kind: args.kind, len: args.len, sha256: args.sha256, parts: [] };
+        return { ok: { session: 1, chunk: HL1.CHUNK_BYTES }, data: [] };
+
+      case "PACK.PUT.CHUNK": {
+        if (!this.staging) throw new ProtocolError("NOSESSION", "no transfer in progress");
+        const bytes = base64ToBytes(args.b64);
+        if (crc32(bytes) !== args.crc) throw new ProtocolError("CRC", `chunk ${args.i} was corrupted in transit`);
+        this.staging.parts[args.i] = bytes;
+        return { ok: { i: args.i }, data: [] };
+      }
+
+      case "PACK.PUT.COMMIT": {
+        if (!this.staging) throw new ProtocolError("NOSESSION", "no transfer in progress");
+        const total = this.staging.parts.reduce((n, p) => n + (p ? p.length : 0), 0);
+        const joined = new Uint8Array(total);
+        let off = 0;
+        for (const p of this.staging.parts) { joined.set(p, off); off += p.length; }
+        const digest = await sha256Hex(joined);
+        if (digest !== this.staging.sha256) {
+          this.staging = null;
+          throw new ProtocolError("HASH", "the pack did not match its checksum, nothing was written");
+        }
+        this.packs[this.staging.kind] = {
+          size: total, keyId: bytesToHex(joined.slice(8, 12)),
+        };
+        this.staging = null;
+        return { ok: { committed: true }, data: [] };
+      }
+
+      case "PACK.DEL":
+        delete this.packs[args.kind];
+        return { ok: { removed: args.kind }, data: [] };
+
+      case "HEXPASS.GET": {
+        const hp = this.pet.hexpass || {};
+        return { ok: {
+          enabled: !!hp.enabled, private: !!hp.private, vis: hp.vis | 0,
+          badge: hp.badge | 0, greeting: hp.greeting | 0,
+          encounters: Array.isArray(hp.enc) ? hp.enc.length : 0,
+          blocked: Array.isArray(hp.blk) ? hp.blk.length : 0,
+          hasSecret: typeof hp.secret === "string",
+          epoch: hp.epoch | 0, today: hp.today | 0,
+        }, data: [] };
+      }
+
+      case "HEXPASS.SET": {
+        const hp = this.pet.hexpass || (this.pet.hexpass = {});
+        if (args.enabled !== undefined) hp.enabled = !!args.enabled;
+        if (args.private !== undefined) hp.private = !!args.private;
+        if (args.vis !== undefined) {
+          if (!Number.isInteger(args.vis) || args.vis < 0 || args.vis >= FW.HEXPASS.VIS_COUNT) {
+            throw new ProtocolError("BADARG", "unknown visibility setting");
+          }
+          hp.vis = args.vis;
+        }
+        return { ok: { saved: true }, data: [] };
+      }
+
+      case "HEXPASS.WIPE": {
+        if (args.confirm !== "WIPE") throw new ProtocolError("CONFIRM", "wipe was not confirmed");
+        const hp = this.pet.hexpass || (this.pet.hexpass = {});
+        delete hp.secret;
+        hp.enc = []; hp.blk = []; hp.enabled = false; hp.private = false;
+        hp.vis = 0; hp.epoch = 0; hp.seq = 0; hp.today = 0;
+        return { ok: { wiped: true }, data: [] };
+      }
+
+      default:
+        throw new ProtocolError("NOVERB", `the device does not know the command "${verb}"`);
+    }
+  }
+
+  async close() { /* nothing to release */ }
+}
+
+/* ── 7. Content pack parsing ──────────────────────────────────────────────
+   Envelope, per P3-W1:
+
+     0   4   magic "HXCP"
+     4   1   format version (1)
+     5   1   kind: 1 dialogue, 2 quests, 3 recipes
+     6   2   reserved, must be zero
+     8   4   key id (first 4 bytes of SHA-512 of the signing public key)
+     12  4   body length, uint32 little endian
+     16  64  Ed25519 signature
+     80  ..  CBOR body
+
+   The signature covers file[0..16) concatenated with the body, so the signed
+   message is NOT contiguous in the file. Getting that wrong is the easiest way
+   for this verifier to disagree with the device's, so it is done in one place
+   and commented.                                                              */
+
+const PACK_HEADER_BYTES = 80;
+
+function parsePack(bytes) {
+  const out = { errors: [], warnings: [], info: null };
+  const err = (m) => out.errors.push(m);
+
+  if (bytes.length < PACK_HEADER_BYTES) {
+    err(`This file is only ${bytes.length} bytes, too short to be a content pack.`);
+    return out;
+  }
+  const magic = String.fromCharCode(...bytes.slice(0, 4));
+  if (magic !== "HXCP") {
+    err(`This is not a HexHound content pack. Expected it to start with "HXCP", found "${escapeHtml(magic)}".`);
+    return out;
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const version = bytes[4];
+  const kind = bytes[5];
+  const reserved = view.getUint16(6, true);
+  const keyId = bytesToHex(bytes.slice(8, 12));
+  const bodyLen = view.getUint32(12, true);
+
+  if (version !== 1) err(`Pack format version ${version} is not supported by this app (expected 1).`);
+  if (!PACK_KINDS[kind]) err(`Unknown pack kind ${kind}. Expected 1 (dialogue), 2 (quests) or 3 (recipes).`);
+  if (reserved !== 0) err("The reserved header field is not zero, so this file is malformed.");
+
+  const expected = PACK_HEADER_BYTES + bodyLen;
+  if (bytes.length !== expected) {
+    // Trailing bytes are a rejection, not something to ignore.
+    err(`The file is ${bytes.length} bytes but its header declares ${expected}. ` +
+        `A pack with extra or missing bytes is rejected rather than partially read.`);
+  }
+
+  if (out.errors.length > 0) return out;
+
+  const meta = PACK_KINDS[kind];
+  if (bodyLen > meta.cap) {
+    err(`This ${meta.name.toLowerCase()} pack's body is ${bodyLen} bytes, over the ${meta.cap} byte limit the device enforces. It would be refused.`);
+    return out;
+  }
+  if (bodyLen > meta.cap - 256) {
+    out.warnings.push(`This pack is close to the ${meta.cap} byte limit for ${meta.name.toLowerCase()} packs.`);
+  }
+
+  out.info = {
+    kind, kindName: meta.name, path: meta.path, version, keyId, bodyLen,
+    totalLen: bytes.length,
+    signature: bytes.slice(16, 80),
+    // The signed message: header bytes 0..16 followed by the body. Not contiguous.
+    signedMessage: (() => {
+      const m = new Uint8Array(16 + bodyLen);
+      m.set(bytes.slice(0, 16), 0);
+      m.set(bytes.slice(PACK_HEADER_BYTES, PACK_HEADER_BYTES + bodyLen), 16);
+      return m;
+    })(),
+  };
+  return out;
+}
+
+// Courtesy pre-check only. The device is the verifier that matters, and it
+// verifies at load time from its own storage, so a failure here is advisory.
+async function verifyPackSignature(info) {
+  if (TRUSTED_KEYS.length === 0) {
+    return { checked: false, reason: "no-keys" };
+  }
+  if (!crypto.subtle) return { checked: false, reason: "no-webcrypto" };
+  for (const raw of TRUSTED_KEYS) {
+    try {
+      const key = await crypto.subtle.importKey("raw", raw, { name: "Ed25519" }, false, ["verify"]);
+      const ok = await crypto.subtle.verify({ name: "Ed25519" }, key, info.signature, info.signedMessage);
+      if (ok) return { checked: true, valid: true };
+    } catch (e) {
+      return { checked: false, reason: "no-ed25519" };
+    }
+  }
+  return { checked: true, valid: false };
+}
+
+/* ── 7b. Firmware image header (.hexfw) ───────────────────────────────────
+   Owned by the OTA workstream (P3-W2); parsed here for two reasons only.
+
+   1. The header is the AUTHENTICATED copy of the version, board and size, so
+      displaying it is free and honest.
+   2. HoundLink is the only component that knows BOTH the version on the device
+      and the version in the file, which makes it the only place a DOWNGRADE can
+      be caught. That matters to this app specifically, because a downgrade is
+      the one firmware operation that can destroy a pet save.
+
+   Why a downgrade is dangerous: pet_core.cpp has a forward-only migrate()
+   ladder. New firmware reading an old save upgrades it cleanly. Old firmware
+   reading a NEWER save has no path back and never will. So updating, playing,
+   then rolling back can leave the old firmware mangling a save it does not
+   understand. The OTA path itself is not what breaks it; the older firmware is.
+
+   The OTA team deliberately does not block downgrades on-device, because taking
+   away the owner's escape route from a bad release is worse than the save risk
+   on a giveaway device with no support channel. That is a reasonable call, and
+   it puts the duty to WARN here.
+
+   Layout (little endian), agreed with P3-W2:
+     0    8   magic "HEXHOTA1"
+     8    2   headerVersion (1)
+     10   2   flags, must be 0
+     12   4   imageLen
+     16   32  boardId, NUL padded ASCII, must exactly match the device
+     48   4   fwVersion, major<<16 | minor<<8 | patch
+     52   4   buildNumber
+     56   4   keyId
+     60   64  imageDigest, SHA-512 of the image
+     124  4   reserved, must be 0
+     128  64  Ed25519 signature over "HEXHOUND-FW-v1\0" || header[0..128)
+   Total header 192 bytes; the file is header followed by the image.          */
+
+const FW_HEADER_BYTES = 192;
+const FW_MAGIC = "HEXHOTA1";
+
+function parseFirmwareHeader(bytes) {
+  const out = { errors: [], warnings: [], info: null };
+  if (bytes.length < FW_HEADER_BYTES) {
+    out.errors.push(`This file is only ${bytes.length} bytes, too short to be a firmware image.`);
+    return out;
+  }
+  const magic = String.fromCharCode(...bytes.slice(0, 8));
+  if (magic !== FW_MAGIC) {
+    out.errors.push(`This is not a HexHound firmware image. Expected it to start with "${FW_MAGIC}".`);
+    return out;
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const headerVersion = view.getUint16(8, true);
+  const flags = view.getUint16(10, true);
+  const imageLen = view.getUint32(12, true);
+  const boardId = new TextDecoder().decode(bytes.slice(16, 48)).replace(/\0+$/, "");
+  const raw = view.getUint32(48, true);
+  const buildNumber = view.getUint32(52, true);
+  const keyId = view.getUint32(56, true);
+
+  if (headerVersion !== 1) out.errors.push(`Firmware header version ${headerVersion} is not supported (expected 1).`);
+  if (flags !== 0) out.errors.push("The firmware header's flags field is not zero, so this file is malformed.");
+  if (view.getUint32(124, true) !== 0) out.errors.push("The firmware header's reserved field is not zero.");
+  if (bytes.length !== FW_HEADER_BYTES + imageLen) {
+    out.errors.push(`The file is ${bytes.length} bytes but its header declares ${FW_HEADER_BYTES + imageLen}.`);
+  }
+  if (out.errors.length > 0) return out;
+
+  out.info = {
+    headerVersion, flags, imageLen, boardId, buildNumber, keyId,
+    version: { major: (raw >>> 16) & 0xFF, minor: (raw >>> 8) & 0xFF, patch: raw & 0xFF, raw },
+    versionText: `${(raw >>> 16) & 0xFF}.${(raw >>> 8) & 0xFF}.${raw & 0xFF}`,
+  };
+  return out;
+}
+
+// Parses "1.2.3" or "1.2.3-beta2" into the same packed form the header uses, so
+// the running firmware string reported by HELLO can be compared with a header.
+// Returns null when the string is not a version we can compare, and callers
+// must treat null as "unknown", never as "equal".
+function parseVersionText(text) {
+  if (typeof text !== "string") return null;
+  const m = /^(\d+)\.(\d+)\.(\d+)/.exec(text.trim());
+  if (!m) return null;
+  const [, a, b, c] = m;
+  return ((Number(a) & 0xFF) << 16) | ((Number(b) & 0xFF) << 8) | (Number(c) & 0xFF);
+}
+
+// The gate itself. Returns what the UI should do about a proposed image.
+function assessFirmwareChange(headerInfo, runningVersionText, deviceBoardId) {
+  const result = { blockers: [], warnings: [], requiresBackup: false, direction: "unknown" };
+
+  if (deviceBoardId && headerInfo.boardId && deviceBoardId !== headerInfo.boardId) {
+    // The device hard-refuses this inside the signed region; catching it here
+    // just saves a pointless transfer and gives a clearer message. Several
+    // boards share a chip family, so the board id string is the only thing
+    // keeping a T-Dongle image off a Waveshare board.
+    result.blockers.push(
+      `This image is built for "${headerInfo.boardId}" but the connected device is "${deviceBoardId}". ` +
+      `The device would refuse it. Installing firmware for the wrong board is exactly what the board id exists to prevent.`);
+  }
+
+  const running = parseVersionText(runningVersionText);
+  if (running === null) {
+    result.warnings.push(
+      `Could not tell what firmware the device is running (it reported "${runningVersionText || "nothing"}"), ` +
+      `so whether this is an update or a downgrade is unknown. Back your pet up first.`);
+    result.requiresBackup = true;
+    return result;
+  }
+
+  if (headerInfo.version.raw > running) {
+    result.direction = "upgrade";
+    result.warnings.push("Back up your pet before updating. The update itself cannot touch the save, but a backup costs nothing.");
+  } else if (headerInfo.version.raw === running) {
+    result.direction = "same";
+    result.warnings.push("This is the same version the device is already running.");
+  } else {
+    result.direction = "downgrade";
+    result.requiresBackup = true;
+    result.warnings.push(
+      `This is a DOWNGRADE, from ${runningVersionText} back to ${headerInfo.versionText}. ` +
+      `Older firmware cannot read a save written by newer firmware: the migration path only runs forwards, ` +
+      `and there will never be a way back. Your pet's save can be damaged by the older firmware after it boots. ` +
+      `A backup is required before this is allowed to proceed.`);
+  }
+  return result;
+}
+
+/* ── 8. UI ────────────────────────────────────────────────────────────────── */
+
+let session = null;      // DeviceSession or null
+let currentPet = null;   // last pet object read from the device
+let deviceInfo = null;
+let pendingRestore = null;
+let pendingPack = null;
+let journalText = "";
+
+/* -- browser support ------------------------------------------------------ */
+function renderSupport() {
+  const el = $("supportNote");
+  if (SerialTransport.isSupported()) {
+    el.innerHTML = "";
+    return;
+  }
+  // Say plainly what is wrong and what to do, rather than failing later when a
+  // button does nothing.
+  const ua = navigator.userAgent;
+  const looksSafari = /Safari/.test(ua) && !/Chrome|Chromium|Edg/.test(ua);
+  const looksFirefox = /Firefox/.test(ua);
+  let which = "This browser";
+  if (looksSafari) which = "Safari";
+  else if (looksFirefox) which = "Firefox";
+  el.innerHTML = `<div class="note bad">
+    <b>${which} cannot talk to a HexHound.</b>
+    HoundLink needs the Web Serial API, which only exists in Chrome and Edge on
+    desktop. It is not available in ${looksSafari ? "Safari" : looksFirefox ? "Firefox" : "this browser"},
+    and not on iOS or Android at all.
+    <ul>
+      <li>Open this page in <b>Chrome</b> or <b>Edge</b> on a desktop computer.</li>
+      <li>Your HexHound does not need this app, so nothing is broken in the meantime.</li>
+    </ul>
+    You can still use the parts of this page that do not need a device: open a backup
+    file below to inspect and validate it, or open a content pack to check it.
+  </div>`;
+}
+
+/* -- connection ----------------------------------------------------------- */
+function setConnected(kind, info) {
+  deviceInfo = info || null;
+  const dot = $("connDot"), who = $("connWho");
+  dot.className = "dot" + (kind === "demo" ? " mock" : kind ? " on" : "");
+  if (!kind) {
+    who.textContent = "Not connected";
+  } else if (kind === "demo") {
+    who.innerHTML = `<b>Demo device</b> - simulated, not real hardware`;
+  } else {
+    who.innerHTML = `<b>${escapeHtml(info.board || "HexHound")}</b> - firmware ${escapeHtml(info.fw || "?")}`;
+  }
+  $("btnDisconnect").disabled = !kind;
+  $("btnConnect").disabled = !!kind;
+  $("btnDemo").disabled = !!kind;
+  $("demoNote").classList.toggle("hide", kind !== "demo");
+
+  const connected = !!kind;
+  $("setupDisconnected").classList.toggle("hide", connected);
+  $("setupBody").classList.toggle("hide", !connected);
+  $("backupDisconnected").classList.toggle("hide", connected);
+  $("backupBody").classList.toggle("hide", !connected);
+  $("privacyDisconnected").classList.toggle("hide", connected);
+  $("privacyBody").classList.toggle("hide", !connected);
+  $("petEmpty").classList.toggle("hide", connected);
+  $("petBody").classList.toggle("hide", !connected);
+  $("journalEmpty").classList.toggle("hide", connected);
+  $("journalBody").classList.toggle("hide", !connected);
+  $("packListEmpty").classList.toggle("hide", connected);
+}
+
+async function connectSerial() {
+  if (!SerialTransport.isSupported()) return;
+  let port;
+  try {
+    // Requires a user gesture. This is why none of this can be automated.
+    port = await navigator.serial.requestPort();
+  } catch (e) {
+    return;   // user dismissed the chooser
+  }
+  const t = new SerialTransport(port);
+  try {
+    await t.open(SERIAL_BAUD);
+    const hello = await t.request("HELLO", {}, { timeoutMs: 3000 });
+    session = new DeviceSession(t, "serial");
+    setConnected("serial", hello.ok);
+    await refreshAll();
+  } catch (e) {
+    try { await t.close(); } catch (x) {}
+    $("supportNote").innerHTML = `<div class="note bad">
+      <b>Could not talk to that device.</b> ${escapeHtml(e.message)}
+      <ul>
+        <li>Make sure you picked the HexHound's port and not another serial device.</li>
+        <li>Firmware without HoundLink support will not answer. That is expected on
+            current builds: the device side of this protocol is not written yet.</li>
+      </ul></div>`;
+  }
+}
+
+function connectDemo() {
+  const t = new DemoTransport();
+  session = new DeviceSession(t, "demo");
+  t.request("HELLO", {}).then(async (hello) => {
+    setConnected("demo", hello.ok);
+    await refreshAll();
+  });
+}
+
+async function disconnect() {
+  if (session) { try { await session.close(); } catch (e) {} }
+  session = null; currentPet = null; deviceInfo = null;
+  setConnected(null);
+}
+
+/* -- read the pet --------------------------------------------------------- */
+async function readPet() {
+  const res = await session.request("PET.GET", {}, { timeoutMs: 8000 });
+  const parts = res.data.map(base64ToBytes);
+  const total = parts.reduce((n, p) => n + p.length, 0);
+  const joined = new Uint8Array(total);
+  let off = 0;
+  for (const p of parts) { joined.set(p, off); off += p.length; }
+  const text = new TextDecoder().decode(joined);
+  return JSON.parse(text);
+}
+
+async function refreshAll() {
+  try {
+    currentPet = await readPet();
+    renderDevice();
+    renderPet();
+    await refreshPrivacy();
+    await refreshPackList();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function renderDevice() {
+  const rows = [
+    ["Board", deviceInfo && deviceInfo.board ? deviceInfo.board : "unknown"],
+    ["Firmware", deviceInfo && deviceInfo.fw ? deviceInfo.fw : "unknown"],
+    ["Save schema", deviceInfo && deviceInfo.schema ? deviceInfo.schema : "unknown"],
+    ["Connection", session && session.isDemo ? "Demo (simulated)" : "USB serial"],
+  ];
+  $("deviceTable").innerHTML = rows
+    .map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`).join("");
+  if (currentPet) {
+    $("petName").value = currentPet.name || "";
+    updateNameHint();
+  }
+}
+
+function updateNameHint() {
+  const v = $("petName").value;
+  $("nameHint").textContent = `${v.length} of ${FW.NAME_MAX} characters used.`;
+}
+
+function renderPet() {
+  if (!currentPet) return;
+  const p = currentPet;
+  // The three surfaced states the firmware exposes, derived exactly as
+  // PetCore does: bond from trust, spirit from mood and health, energy direct.
+  const bond = p.trust | 0;
+  const spirit = Math.round(((p.mood | 0) + (p.health | 0)) / 2);
+  const energy = p.energy | 0;
+  const headline = [
+    ["Name", escapeHtml(p.name || "unnamed"), null],
+    ["Stage", escapeHtml(STAGE_NAMES[p.stage] || `#${p.stage}`), null],
+    ["Form", escapeHtml(FORM_NAMES[p.form || 0] || "Undecided"), null],
+    ["Bond", bond, bond],
+    ["Spirit", spirit, spirit],
+    ["Energy", energy, energy],
+  ];
+  $("petHeadline").innerHTML = headline.map(([k, v, meter]) => `
+    <div class="stat"><div class="k">${escapeHtml(k)}</div>
+      <div class="v">${v}</div>
+      ${meter === null ? "" : `<div class="meter"><i style="width:${Math.max(0, Math.min(100, meter))}%"></i></div>`}
+    </div>`).join("");
+
+  const counters = [
+    ["XP", p.xp], ["Mastery XP", p.masteryXP], ["Mastery rank", p.masteryRank],
+    ["Interactions", p.interactions], ["Wifi scans", p.wifiScans],
+    ["Networks seen", Array.isArray(p.seenWifi) ? p.seenWifi.length : 0],
+    ["Bluetooth seen", Array.isArray(p.seenBle) ? p.seenBle.length : 0],
+    ["Findings flagged", (p.threatOpenCount | 0) + (p.threatDuplicateCount | 0) + (p.threatTrackerCount | 0)],
+    ["  open networks", p.threatOpenCount],
+    ["  repeat SSIDs", p.threatDuplicateCount],
+    ["  tracker leads", p.threatTrackerCount],
+    ["Quests completed", p.questsCompleted], ["Missions completed", p.missionsCompleted],
+    ["Best game score", p.bestGameScore],
+    ["Exploration pts", p.roamPoints], ["Steps walked", p.stepCount],
+    ["Roam sessions", p.roamSessions], ["Check-ins", p.checkIns],
+    ["Traits", `${TRAIT_NAMES[p.trait0] || "?"}, ${TRAIT_NAMES[p.trait1] || "?"}`],
+    ["Hatched", p.hatched ? "yes" : "not yet"],
+    ["Save sequence", p.saveSeq],
+  ];
+  $("petCounters").innerHTML = counters
+    .map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v === undefined ? "0" : v)}</td></tr>`).join("");
+
+  // Findings are flagged, never claimed as confirmed. Same language the device
+  // uses on its own report screen.
+  const flagged = (p.threatOpenCount | 0) + (p.threatDuplicateCount | 0) + (p.threatTrackerCount | 0);
+  if (flagged > 0) {
+    $("petCounters").insertAdjacentHTML("afterend",
+      `<div class="note" style="margin-top:12px"><b>Flagged, not confirmed.</b>
+       These are candidates worth a human look, not proven threats.</div>`);
+  }
+}
+
+/* -- naming --------------------------------------------------------------- */
+async function saveName() {
+  const name = $("petName").value;
+  $("nameStatus").textContent = "saving...";
+  try {
+    const res = await session.request("PET.NAME", { name });
+    if (currentPet) currentPet.name = res.ok.name;
+    $("nameStatus").textContent = `saved as "${res.ok.name}"`;
+    renderPet();
+  } catch (e) {
+    $("nameStatus").textContent = `failed: ${e.message}`;
+  }
+}
+
+/* -- backup --------------------------------------------------------------- */
+async function doBackup() {
+  const status = $("backupStatus");
+  status.textContent = "reading the pet from the device...";
+  try {
+    const pet = await readPet();
+    currentPet = pet;
+    const includeSecret = $("includeSecret").checked;
+    const text = await buildBackup(pet, {
+      board: deviceInfo && deviceInfo.board, fw: deviceInfo && deviceInfo.fw,
+      demo: session.isDemo || undefined,
+    }, includeSecret);
+    const safeName = String(pet.name || "hexhound").replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 24);
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadFile(`${safeName}-${stamp}.hexhound.json`, text, "application/json");
+    status.textContent = includeSecret
+      ? "backup downloaded, WITH the HexPass secret in it - store it carefully"
+      : "backup downloaded (HexPass secret left out)";
+    renderPet();
+  } catch (e) {
+    status.textContent = `failed: ${e.message}`;
+  }
+}
+
+/* -- restore -------------------------------------------------------------- */
+function renderRestoreReport(r) {
+  const box = $("restoreReport");
+  const parts = [];
+
+  if (r.fatal) {
+    box.innerHTML = `<div class="note bad"><b>Cannot read this file.</b> ${escapeHtml(r.fatal)}</div>`;
+    $("restoreConfirm").classList.add("hide");
+    pendingRestore = null;
+    return;
+  }
+
+  const s = r.summary;
+  parts.push(`<div class="card" style="margin-top:14px;background:var(--panel2)">
+    <h2>What is in this backup</h2>
+    <table class="kv">
+      <tr><td>Pet name</td><td>${escapeHtml(s.name)}</td></tr>
+      <tr><td>Stage</td><td>${escapeHtml(STAGE_NAMES[s.stage] || "#" + s.stage)}</td></tr>
+      <tr><td>Form</td><td>${escapeHtml(FORM_NAMES[s.form] || "Undecided")}</td></tr>
+      <tr><td>XP</td><td>${s.xp}</td></tr>
+      <tr><td>Save schema</td><td>${s.schema}</td></tr>
+      <tr><td>HexPass identity</td><td>${s.hasSecret ? "included in this file" : "not included, a fresh one will be made"}</td></tr>
+      <tr><td>Encounters</td><td>${s.encounters}</td></tr>
+      <tr><td>Created</td><td>${escapeHtml(r.meta && r.meta.created ? r.meta.created : "unknown")}</td></tr>
+      <tr><td>Written by</td><td>${escapeHtml(r.meta && r.meta.app ? r.meta.app : "unknown")}</td></tr>
+    </table></div>`);
+
+  const findings = [];
+  if (r.noHash) {
+    findings.push(`<li class="warn">This backup has no integrity hash, so damage to it cannot be detected. It was probably written by hand.</li>`);
+  } else if (r.hashOk) {
+    findings.push(`<li class="ok">Integrity check passed. The pet data is exactly as it was when the backup was made.</li>`);
+  } else {
+    findings.push(`<li class="err">Integrity check FAILED. The pet data does not match the hash stored in the file, which normally means the file was damaged. Expected <code>${escapeHtml(String(r.expectedHash).slice(0, 16))}</code>, got <code>${escapeHtml(String(r.actualHash).slice(0, 16))}</code>.</li>`);
+  }
+  for (const e of r.errors) findings.push(`<li class="err">${escapeHtml(e)}</li>`);
+  for (const w of r.warnings) findings.push(`<li class="warn">${escapeHtml(w)}</li>`);
+  if (r.errors.length === 0) findings.push(`<li class="ok">Every field is within the range the firmware accepts.</li>`);
+
+  parts.push(`<ul class="findings">${findings.join("")}</ul>`);
+  box.innerHTML = parts.join("");
+
+  const blocked = r.errors.length > 0;
+  const hashProblem = !r.hashOk && !r.noHash;
+
+  if (blocked) {
+    box.insertAdjacentHTML("beforeend",
+      `<div class="note bad"><b>This backup will not be restored.</b>
+       The problems marked above would damage or silently change the pet, so the
+       restore is refused. This is not something you can override, because a
+       corrupted pet is worse than no restore at all.</div>`);
+    $("restoreConfirm").classList.add("hide");
+    pendingRestore = null;
+    return;
+  }
+
+  pendingRestore = r;
+  $("restoreConfirm").classList.remove("hide");
+  $("overrideWrap").style.display = hashProblem ? "flex" : "none";
+  $("overrideHash").checked = false;
+  $("btnRestore").disabled = hashProblem;
+  if (!session) {
+    box.insertAdjacentHTML("beforeend",
+      `<div class="note info"><b>Nothing is connected.</b> This file has been checked and
+       is good, but you need a connected device to restore it onto.</div>`);
+    $("btnRestore").disabled = true;
+  }
+}
+
+async function doRestore() {
+  if (!pendingRestore || !session) return;
+  const status = $("restoreStatus");
+  const btn = $("btnRestore");
+  btn.disabled = true;
+  try {
+    const text = JSON.stringify(pendingRestore.pet);
+    const bytes = new TextEncoder().encode(text);
+    const digest = await sha256Hex(bytes);
+
+    status.textContent = "opening a staging transfer...";
+    await session.request("PET.PUT.BEGIN", { len: bytes.length, sha256: digest });
+
+    const nChunks = Math.ceil(bytes.length / HL1.CHUNK_BYTES);
+    for (let i = 0; i < nChunks; i++) {
+      const slice = bytes.slice(i * HL1.CHUNK_BYTES, (i + 1) * HL1.CHUNK_BYTES);
+      status.textContent = `sending ${i + 1} of ${nChunks}...`;
+      await session.request("PET.PUT.CHUNK", {
+        i, n: nChunks, crc: crc32(slice), b64: bytesToBase64(slice),
+      });
+    }
+
+    // Nothing has touched the live pet until this call succeeds.
+    status.textContent = "verifying on the device...";
+    const res = await session.request("PET.PUT.COMMIT", {}, { timeoutMs: 10000 });
+
+    status.textContent = `restored. The device wrote save slot ${escapeHtml(res.ok.slot || "?")}.`;
+    $("restoreConfirm").classList.add("hide");
+    pendingRestore = null;
+    await refreshAll();
+  } catch (e) {
+    // Every failure path in the protocol leaves the existing pet in place, so
+    // this message can say so without hedging.
+    status.textContent = "";
+    $("restoreReport").insertAdjacentHTML("beforeend",
+      `<div class="note bad"><b>Restore failed, and nothing was written.</b>
+       ${escapeHtml(e.message)}<br>
+       Your pet on the device is exactly as it was. You can safely try again.</div>`);
+    btn.disabled = false;
+  }
+}
+
+/* -- content packs -------------------------------------------------------- */
+async function onPackChosen(file) {
+  const box = $("packReport");
+  pendingPack = null;
+  $("btnInstallPack").disabled = true;
+  if (!file) { box.innerHTML = ""; return; }
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const parsed = parsePack(bytes);
+
+  if (parsed.errors.length > 0) {
+    box.innerHTML = `<ul class="findings">${parsed.errors.map((e) => `<li class="err">${escapeHtml(e)}</li>`).join("")}</ul>`;
+    return;
+  }
+
+  const info = parsed.info;
+  const sig = await verifyPackSignature(info);
+  const findings = [];
+
+  // Only the metadata that actually exists in the format is shown. There is no
+  // pack name, author, version or board target in a .hcp file, and inventing a
+  // display for fields the signature does not cover would be worse than showing
+  // less. The key id is the honest identity signal.
+  findings.push(`<li class="ok">Envelope is well formed: ${escapeHtml(info.kindName.toLowerCase())} pack, format version ${info.version}, ${info.bodyLen} byte body.</li>`);
+  findings.push(`<li class="ok">Signed by key <code>${escapeHtml(info.keyId)}</code>.</li>`);
+  for (const w of parsed.warnings) findings.push(`<li class="warn">${escapeHtml(w)}</li>`);
+
+  if (sig.checked && sig.valid) {
+    findings.push(`<li class="ok">Signature verified in this browser against a key HoundLink trusts.</li>`);
+  } else if (sig.checked && !sig.valid) {
+    findings.push(`<li class="err">Signature does NOT match any key HoundLink trusts. The device would refuse this pack when it next starts.</li>`);
+  } else if (sig.reason === "no-keys") {
+    findings.push(`<li class="warn">HoundLink has no signing keys built in, so it cannot check this signature itself. The device checks it when it loads content, and refuses anything that does not verify.</li>`);
+  } else {
+    findings.push(`<li class="warn">This browser cannot check Ed25519 signatures. The device still checks it at load time.</li>`);
+  }
+
+  findings.push(`<li class="ok">Installing this replaces <code>${escapeHtml(info.path)}</code> only. Your pet's stats, XP, stage, inventory and HexPass data are not touched.</li>`);
+
+  box.innerHTML = `<ul class="findings">${findings.join("")}</ul>`;
+
+  const fatal = sig.checked && !sig.valid;
+  pendingPack = fatal ? null : { info, bytes };
+  $("btnInstallPack").disabled = fatal || !session;
+  if (!session && !fatal) {
+    box.insertAdjacentHTML("beforeend",
+      `<div class="note info"><b>Nothing is connected.</b> This pack has been checked. Connect a device to install it.</div>`);
+  }
+}
+
+async function installPack() {
+  if (!pendingPack || !session) return;
+  const status = $("packStatus");
+  $("btnInstallPack").disabled = true;
+  try {
+    const { bytes, info } = pendingPack;
+    const digest = await sha256Hex(bytes);
+    status.textContent = "opening transfer...";
+    await session.request("PACK.PUT.BEGIN", { kind: info.kind, len: bytes.length, sha256: digest });
+    const nChunks = Math.ceil(bytes.length / HL1.CHUNK_BYTES);
+    for (let i = 0; i < nChunks; i++) {
+      const slice = bytes.slice(i * HL1.CHUNK_BYTES, (i + 1) * HL1.CHUNK_BYTES);
+      status.textContent = `sending ${i + 1} of ${nChunks}...`;
+      await session.request("PACK.PUT.CHUNK", { i, n: nChunks, crc: crc32(slice), b64: bytesToBase64(slice) });
+    }
+    status.textContent = "verifying...";
+    await session.request("PACK.PUT.COMMIT", {}, { timeoutMs: 10000 });
+    status.textContent = "installed. Restart the device for it to take effect.";
+    await refreshPackList();
+  } catch (e) {
+    status.textContent = `failed, nothing was written: ${e.message}`;
+    $("btnInstallPack").disabled = false;
+  }
+}
+
+async function refreshPackList() {
+  if (!session) { $("packList").innerHTML = ""; return; }
+  try {
+    const res = await session.request("PACK.LIST", {});
+    const byKind = {};
+    for (const p of res.ok.packs || []) byKind[p.kind] = p;
+    const rows = Object.keys(PACK_KINDS).map((k) => {
+      const kind = Number(k), meta = PACK_KINDS[kind], p = byKind[kind];
+      const cell = p
+        ? `custom pack, ${p.size} bytes, key <code>${escapeHtml(p.keyId || "?")}</code>
+           <button class="sm ghost" data-del="${kind}" style="margin-left:8px">Remove</button>`
+        : `built-in content`;
+      return `<tr><td>${escapeHtml(meta.name)}</td><td>${cell}</td></tr>`;
+    });
+    $("packList").innerHTML = rows.join("");
+    $("packList").querySelectorAll("button[data-del]").forEach((b) => {
+      b.addEventListener("click", async () => {
+        b.disabled = true;
+        try {
+          await session.request("PACK.DEL", { kind: Number(b.dataset.del) });
+          await refreshPackList();
+          $("packStatus").textContent = "removed. Restart the device for it to take effect.";
+        } catch (e) { $("packStatus").textContent = `failed: ${e.message}`; }
+      });
+    });
+  } catch (e) {
+    $("packList").innerHTML = `<tr><td colspan="2">Could not list packs: ${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+
+/* -- journal -------------------------------------------------------------- */
+async function readJournal() {
+  const n = Number($("journalCount").value);
+  const out = $("journalOut");
+  out.innerHTML = `<p class="mono-sm">reading...</p>`;
+  try {
+    const res = await session.request("JOURNAL.GET", { n }, { timeoutMs: 8000 });
+    const parts = res.data.map(base64ToBytes);
+    const total = parts.reduce((a, p) => a + p.length, 0);
+    const joined = new Uint8Array(total);
+    let off = 0;
+    for (const p of parts) { joined.set(p, off); off += p.length; }
+    journalText = new TextDecoder().decode(joined);
+
+    const lines = journalText.split("\n").filter((l) => l.trim().length > 0);
+    if (lines.length === 0) {
+      out.innerHTML = `<div class="note info"><b>Nothing logged yet.</b> Take your HexHound out on patrol.</div>`;
+      $("btnJournalSave").disabled = true;
+      return;
+    }
+    // Format is "millis|TYPE|detail1|detail2", written by StorageModule.
+    const rows = lines.map((l) => {
+      const f = l.split("|");
+      const ms = Number(f[0]);
+      const t = Number.isFinite(ms) ? `${(ms / 1000).toFixed(1)}s` : escapeHtml(f[0] || "");
+      return `<div class="journal-row">
+        <span class="t">${t}</span>
+        <span class="ty">${escapeHtml(f[1] || "")}</span>
+        <span>${escapeHtml([f[2], f[3]].filter(Boolean).join(" - "))}</span>
+      </div>`;
+    }).join("");
+    out.innerHTML = `<div class="card" style="background:var(--panel2);margin-top:12px">${rows}</div>`;
+    $("btnJournalSave").disabled = false;
+  } catch (e) {
+    out.innerHTML = `<div class="note bad"><b>Could not read the journal.</b> ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+/* -- privacy -------------------------------------------------------------- */
+function renderVisCost() {
+  const vis = Number($("hpVis").value);
+  const el = $("visCost");
+  if (vis === 0) {
+    el.innerHTML = `<b>Friends only.</b> Strangers nearby learn that <i>a</i> HexHound passed and
+      roughly how grown it is. That is about two bits of information, nowhere near enough to
+      pick your device out of a crowd or follow it. This is the default and the private choice.`;
+  } else {
+    el.innerHTML = `<b>Discoverable costs you real privacy, and here is the number.</b>
+      Your form, badge and greeting become readable by anyone nearby. Together those are about
+      2240 combinations, roughly 11 bits. In a hall with a few hundred HexHounds that is enough
+      for somebody to recognise your device by its cosmetic profile alone, even after its
+      identifier rotates. That defeats the rotation the rest of the design rests on.
+      It is a fine trade at a conference where being seen is the point, and a bad one on a
+      daily commute. You are choosing it knowingly, and you can change it back at any time.`;
+  }
+}
+
+async function refreshPrivacy() {
+  if (!session) return;
+  try {
+    const res = await session.request("HEXPASS.GET", {});
+    const hp = res.ok;
+    $("hpEnabled").checked = !!hp.enabled;
+    $("hpPrivate").checked = !!hp.private;
+    $("hpVis").value = String(hp.vis || 0);
+    renderVisCost();
+    $("hpStats").innerHTML = [
+      ["HexPass", hp.enabled ? "on" : "off (nothing is transmitted)"],
+      ["Private mode", hp.private ? "on, advertising stopped" : "off"],
+      ["Visible to strangers", hp.vis === 1 ? "full card" : "identifier and stage only"],
+      ["Identity secret", hp.hasSecret ? "present" : "none yet"],
+      ["Friendships remembered", hp.encounters],
+      ["Blocked", hp.blocked],
+      ["Encounters today", hp.today],
+    ].map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`).join("");
+  } catch (e) {
+    $("hpStats").innerHTML = `<tr><td colspan="2">Could not read HexPass state: ${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+
+async function savePrivacy() {
+  const status = $("privacyStatus");
+  status.textContent = "saving...";
+  try {
+    await session.request("HEXPASS.SET", {
+      enabled: $("hpEnabled").checked,
+      private: $("hpPrivate").checked,
+      vis: Number($("hpVis").value),
+    });
+    status.textContent = "saved to the device";
+    await refreshPrivacy();
+  } catch (e) {
+    status.textContent = `failed: ${e.message}`;
+  }
+}
+
+async function doWipe() {
+  const status = $("wipeStatus");
+  status.textContent = "wiping...";
+  try {
+    await session.request("HEXPASS.WIPE", { confirm: "WIPE" });
+    status.textContent = "HexPass data erased. A new identity is generated on next start.";
+    $("wipeConfirm").value = "";
+    $("btnWipe").disabled = true;
+    await refreshPrivacy();
+    if (session) { currentPet = await readPet(); renderPet(); }
+  } catch (e) {
+    status.textContent = `failed: ${e.message}`;
+  }
+}
+
+/* -- wiring --------------------------------------------------------------- */
+function initUI() {
+  renderSupport();
+  setConnected(null);
+  renderVisCost();
+  $("verLine").textContent = ` HoundLink ${APP_VERSION}.`;
+
+  $("tabs").addEventListener("click", (ev) => {
+    const btn = ev.target.closest("button[data-screen]");
+    if (!btn) return;
+    $("tabs").querySelectorAll("button").forEach((b) => b.setAttribute("aria-selected", "false"));
+    btn.setAttribute("aria-selected", "true");
+    document.querySelectorAll("section.screen").forEach((s) => s.classList.remove("active"));
+    $("screen-" + btn.dataset.screen).classList.add("active");
+  });
+
+  $("btnConnect").addEventListener("click", connectSerial);
+  $("btnDemo").addEventListener("click", connectDemo);
+  $("btnDisconnect").addEventListener("click", disconnect);
+
+  $("petName").addEventListener("input", updateNameHint);
+  $("btnSaveName").addEventListener("click", saveName);
+
+  $("btnBackup").addEventListener("click", doBackup);
+  $("restoreFile").addEventListener("change", async (ev) => {
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) return;
+    $("restoreStatus").textContent = "";
+    const text = await f.text();
+    renderRestoreReport(await inspectBackup(text));
+  });
+  $("overrideHash").addEventListener("change", (ev) => {
+    $("btnRestore").disabled = !ev.target.checked || !session;
+  });
+  $("btnRestore").addEventListener("click", doRestore);
+  $("btnCancelRestore").addEventListener("click", () => {
+    pendingRestore = null;
+    $("restoreConfirm").classList.add("hide");
+    $("restoreReport").innerHTML = "";
+    $("restoreFile").value = "";
+  });
+
+  $("packFile").addEventListener("change", (ev) => onPackChosen(ev.target.files && ev.target.files[0]));
+  $("btnInstallPack").addEventListener("click", installPack);
+
+  $("btnJournal").addEventListener("click", readJournal);
+  $("btnJournalSave").addEventListener("click", () => {
+    downloadFile(`hexhound-journal-${new Date().toISOString().slice(0, 10)}.txt`, journalText, "text/plain");
+  });
+
+  $("hpVis").addEventListener("change", renderVisCost);
+  $("btnSavePrivacy").addEventListener("click", savePrivacy);
+  $("wipeConfirm").addEventListener("input", (ev) => {
+    $("btnWipe").disabled = (ev.target.value !== "WIPE") || !session;
+  });
+  $("btnWipe").addEventListener("click", doWipe);
+
+  // Offline support. Scoped to this directory so it can never intercept the
+  // existing flasher at the site root.
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js", { scope: "./" }).catch(() => {});
+  }
+}
+
+// Exposed so a test page can drive the pure logic without a device.
+window.HoundLink = {
+  validatePetSave, inspectBackup, buildBackup, parsePack, canonicalJson,
+  sha256Hex, crc32, bytesToBase64, base64ToBytes, makeDemoPet, DemoTransport,
+  parseFirmwareHeader, parseVersionText, assessFirmwareChange,
+  FW, PACK_KINDS, APP_VERSION, SERIAL_BAUD,
+};
+
+initUI();
+</script>
+</body>
+</html>

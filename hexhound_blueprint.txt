@@ -1,0 +1,607 @@
+Below is the **full V1 design blueprint** for the project.
+
+---
+
+# HexHound
+
+### Cyber Recon Pet System for LilyGo T-Dongle S3
+
+---
+
+# 1. Project Overview
+
+HexHound is a **gamified cybersecurity companion device** built on the LilyGo T-Dongle S3 (ESP32-S3).
+
+The device acts as a **digital pet that evolves through stages**, gaining abilities as it gathers information from its environment and completes safe training missions.
+
+The pet combines three functional roles:
+
+| Role         | Function                             |
+| ------------ | ------------------------------------ |
+| Recon Pet    | discovers networks and BLE devices   |
+| USB Gremlin  | performs harmless awareness missions |
+| Guardian Pet | detects suspicious activity          |
+
+The pet grows based on **real-world environmental interactions**.
+
+---
+
+# 2. Core Goals
+
+The system is designed to:
+
+* Gamify cybersecurity awareness
+* Provide lightweight environmental reconnaissance
+* Demonstrate security concepts visually
+* Create a portable demo device
+* Provide educational alerts
+
+---
+
+# 3. Hardware Platform
+
+The device is built around **LilyGo T-Dongle S3**.
+
+Typical board features include:
+
+| Component                  | Function         |
+| -------------------------- | ---------------- |
+| ESP32-S3 dual-core 240 MHz | main processor   |
+| Wi-Fi 2.4 GHz              | network scanning |
+| Bluetooth BLE              | beacon scanning  |
+| ST7735 LCD display         | UI               |
+| RGB LED                    | alerts           |
+| USB-A connector            | power + USB HID  |
+| MicroSD / TF slot          | logs             |
+| Button                     | input            |
+
+ESP32-S3 supports **native USB HID functionality** via TinyUSB and includes integrated Wi-Fi and Bluetooth radios suitable for scanning tasks (Espressif Systems, n.d.-a; Espressif Systems, n.d.-b).
+
+---
+
+# 4. Pet Evolution System
+
+The pet evolves through **five stages**.
+
+| Stage | Name               | Ability              |
+| ----- | ------------------ | -------------------- |
+| 1     | Egg                | initialization       |
+| 2     | Packet Pup         | Wi-Fi reconnaissance |
+| 3     | Beacon Beast       | BLE detection        |
+| 4     | Gremlin Mode       | USB missions         |
+| 5     | Sentinel | anomaly detection    |
+
+---
+
+# 5. Stage Behavior
+
+## Stage 1 - Egg
+
+State when device is first flashed.
+
+Characteristics:
+
+* sleeping animation
+* minimal abilities
+* gathers initial interactions
+
+Requirements to hatch:
+
+* 10 interaction points
+* 1 Wi-Fi scan
+* 1 USB connect
+* first save file created
+
+---
+
+## Stage 2 - Packet Pup
+
+Wi-Fi recon stage.
+
+Abilities:
+
+* Wi-Fi scanning
+* channel analysis
+* SSID logging
+
+Food sources:
+
+| Event          | Food | XP |
+| -------------- | ---- | -- |
+| Wi-Fi network  | 5    | 2  |
+| trusted SSID   | 10   | 3  |
+| scan completed | 3    | 1  |
+
+---
+
+## Stage 3 - Beacon Beast
+
+BLE detection stage.
+
+Abilities:
+
+* BLE scanning
+* tracker detection
+* beacon logging
+
+Food sources:
+
+| Event             | Food | XP |
+| ----------------- | ---- | -- |
+| BLE device        | 4    | 2  |
+| BLE beacon        | 6    | 3  |
+| tracker candidate | 20   | 10 |
+
+---
+
+## Stage 4 - Gremlin Mode
+
+USB interaction stage.
+
+Abilities:
+
+* safe HID awareness demos
+* mission system
+* host recognition
+
+Food sources:
+
+| Event            | Food | XP |
+| ---------------- | ---- | -- |
+| USB connect      | 5    | 2  |
+| mission complete | 15   | 5  |
+| trusted host     | 10   | 4  |
+
+---
+
+## Stage 5 - Sentinel
+
+Guardian stage.
+
+Abilities:
+
+* anomaly detection
+* rogue network alerts
+* tracker warnings
+
+Food sources:
+
+| Event          | Food | XP |
+| -------------- | ---- | -- |
+| duplicate SSID | 25   | 12 |
+| open network   | 10   | 5  |
+| suspicious BLE | 20   | 10 |
+
+---
+
+# 6. Pet Stat System
+
+Each pet has internal stats.
+
+| Stat     | Range     | Description                   |
+| -------- | --------- | ----------------------------- |
+| Hunger   | 0-100     | decreases over time           |
+| Mood     | 0-100     | happiness                     |
+| Energy   | 0-100     | patrol ability                |
+| XP       | unlimited | growth                        |
+| Trust    | 0-100     | known environment familiarity |
+| Mischief | 0-100     | gremlin behavior              |
+| Health   | 0-100     | overall well-being            |
+
+---
+
+# 7. Personality Traits
+
+Each pet receives **two random traits at hatch**.
+
+Possible traits:
+
+| Trait      | Effect                        |
+| ---------- | ----------------------------- |
+| Curious    | bonus XP for discoveries      |
+| Protective | bonus guardian XP             |
+| Chaotic    | gremlin missions trigger more |
+| Sleepy     | energy drains slower          |
+| Greedy     | requires more food            |
+| Brave      | alert reactions faster        |
+
+Traits influence behavior and animations.
+
+---
+
+# 8. Event System
+
+The firmware runs an event-driven architecture.
+
+Core events:
+
+```
+EVENT_USB_CONNECTED
+EVENT_USB_DISCONNECTED
+EVENT_WIFI_SCAN_DONE
+EVENT_WIFI_DUPLICATE_SSID
+EVENT_WIFI_OPEN_NETWORK
+EVENT_BLE_DEVICE_FOUND
+EVENT_BLE_TRACKER_ALERT
+EVENT_BUTTON_SHORT
+EVENT_BUTTON_LONG
+EVENT_MISSION_COMPLETE
+EVENT_TIMER_TICK
+```
+
+Events feed into the **rules engine**.
+
+---
+
+# 9. Rules Engine
+
+Rules convert events into stat changes.
+
+Example:
+
+```
+WiFi networks discovered = food gain
+Duplicate SSID = guardian XP + alert
+USB connect = trust increase
+Mission completed = mischief increase
+```
+
+The rules engine maintains balance between recon, gremlin, and guardian behaviors.
+
+---
+
+# 10. Patrol System
+
+Patrol is the primary gameplay loop.
+
+When activated:
+
+1. run Wi-Fi scan
+2. run BLE scan
+3. analyze results
+4. reward pet
+5. log journal entry
+
+Example result:
+
+```
+PATROL COMPLETE
+
+WiFi: 6
+BLE: 3
+Open AP: 1
+
+Food +19
+XP +12
+```
+
+---
+
+# 11. Mission System
+
+Available in Gremlin Mode.
+
+Mission examples:
+
+* display USB security message
+* open awareness page
+* type security tip
+
+Example output:
+
+```
+USB Awareness Mission
+
+Completed successfully
+
+XP +15
+Food +8
+```
+
+---
+
+# 12. Notification System
+
+Notifications alert the user.
+
+Three tiers exist.
+
+| Level    | Trigger             | Behavior   |
+| -------- | ------------------- | ---------- |
+| Info     | discovery           | blue LED   |
+| Warning  | suspicious activity | yellow LED |
+| Critical | confirmed anomaly   | red LED    |
+
+Example alert:
+
+```
+ALERT
+
+Duplicate SSID
+CoffeeShop_WiFi
+```
+
+---
+
+# 13. Storage System
+
+Data stored locally.
+
+Files:
+
+| File           | Purpose        |
+| -------------- | -------------- |
+| pet_state.json | pet stats      |
+| journal.log    | activity log   |
+| config.json    | trusted hosts  |
+| patrol.db      | patrol results |
+
+MicroSD recommended for logs.
+
+---
+
+# 14. File Architecture
+
+```
+src/
+ main.cpp
+ config.h
+
+ pet/
+   pet_core.cpp
+   pet_core.h
+   pet_rules.cpp
+
+ events/
+   event_bus.cpp
+   event_types.h
+
+ modules/
+   wifi_module.cpp
+   ble_module.cpp
+   usb_module.cpp
+   storage_module.cpp
+   notif_module.cpp
+
+ ui/
+   ui_home.cpp
+   ui_alert.cpp
+   ui_patrol.cpp
+   ui_journal.cpp
+
+assets/
+ sprites/
+ icons/
+```
+
+---
+
+# 15. Game Loop
+
+Simplified firmware loop.
+
+```
+update pet needs
+check for events
+process WiFi/BLE scans
+apply rules
+update UI
+save state
+```
+
+---
+
+# 16. Environment Awareness
+
+The pet identifies environments.
+
+Example:
+
+| Environment | Behavior |
+| ----------- | -------- |
+| Home lab    | playful  |
+| Office      | focused  |
+| Unknown     | cautious |
+
+Environment detection uses:
+
+* SSID patterns
+* known hosts
+* BLE fingerprints
+
+---
+
+# 17. Host Recognition
+
+Trusted hosts increase trust.
+
+Unknown hosts trigger alerts.
+
+Examples:
+
+```
+Known host: WORKSTATION-01
+Trust increased
+```
+
+---
+
+# 18. Journal System
+
+Stores activity history.
+
+Example entry:
+
+```
+2026-03-10
+
+WiFi networks: 8
+BLE devices: 3
+Mission completed
+XP gained: 42
+```
+
+---
+
+# 19. UI Design
+
+Four main screens.
+
+## Home
+
+```
+HexHound
+
+Stage: Packet Pup
+
+Hun 72
+Mood 81
+XP 118
+```
+
+## Patrol Results
+
+```
+PATROL COMPLETE
+
+WiFi 6
+BLE 3
+```
+
+## Alert
+
+```
+ALERT
+Duplicate SSID detected
+```
+
+## Journal
+
+```
+06:12 WiFi patrol
+06:13 BLE detected
+```
+
+---
+
+# 20. Development Stack
+
+Recommended stack:
+
+| Tool              | Purpose            |
+| ----------------- | ------------------ |
+| PlatformIO        | build system       |
+| Arduino framework | firmware           |
+| TinyUSB           | USB support        |
+| WiFi.h            | network scanning   |
+| BLE libraries     | Bluetooth scanning |
+| TFT_eSPI          | display            |
+
+ESP-IDF documentation confirms the ESP32-S3 platform supports Wi-Fi scanning, BLE functionality, and USB device capabilities needed for this design (Espressif Systems, n.d.-a; Espressif Systems, n.d.-b).
+
+---
+
+# 21. Development Roadmap
+
+## Phase 1
+
+Core pet engine.
+
+Deliverables:
+
+* Egg state
+* stats system
+* save/load
+
+## Phase 2
+
+Packet Pup.
+
+Deliverables:
+
+* Wi-Fi scanning
+* patrol results
+
+## Phase 3
+
+Beacon Beast.
+
+Deliverables:
+
+* BLE scanning
+
+## Phase 4
+
+Gremlin Mode.
+
+Deliverables:
+
+* USB mission system
+
+## Phase 5
+
+Sentinel.
+
+Deliverables:
+
+* anomaly detection
+* alerts
+
+---
+
+# 22. Future Enhancements
+
+Possible V2 features:
+
+* sound effects
+* OTA firmware updates
+* multiplayer pet battles
+* shared pet evolution
+* phone companion app
+* web dashboard
+
+---
+
+# 23. Branding
+
+Recommended product name:
+
+**HexHound**
+
+Evolution path:
+
+```
+Egg
+↓
+Packet Pup
+↓
+Beacon Beast
+↓
+Gremlin Mode
+↓
+Sentinel
+```
+
+---
+
+# 24. Why This Project Works
+
+The design succeeds because it:
+
+* gamifies cybersecurity concepts
+* creates emotional engagement
+* provides real environmental awareness
+* fits perfectly on ESP32-S3 hardware
+
+---
+
+# References
+
+Espressif Systems. (n.d.-a). *ESP32-S3 Wi-Fi programming guide*. [https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-guides/wifi.html](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-guides/wifi.html)
+
+Espressif Systems. (n.d.-b). *USB device stack for ESP32-S3*. [https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-reference/peripherals/usb_device.html](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-reference/peripherals/usb_device.html)
+
+Xinyuan-LilyGO. (n.d.). *T-Dongle-S3*. GitHub. [https://github.com/Xinyuan-LilyGO/T-Dongle-S3](https://github.com/Xinyuan-LilyGO/T-Dongle-S3)
+
+---
+

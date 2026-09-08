@@ -1,0 +1,32 @@
+{
+  "_comment": [
+    "Authored dialogue pack. This is the SOURCE format and it did not change",
+    "when packs moved to signed CBOR in P3-W1. Field names, the name-or-ordinal",
+    "spelling of every enum, and the meaning of an omitted field are all",
+    "exactly what the plain-JSON loader accepted before.",
+    "",
+    "Sign it with:",
+    "  python scripts/sign_content_pack.py --kind dialogue \\",
+    "      --in content-src/dialogue.json --out data/content/dialogue.hcp"
+  ],
+  "lines": [
+    { "text": "Back already? Good.", "context": "greeting", "trait": "protective" },
+    { "text": "I kept watch while you were out.", "context": "greeting", "trait": "protective" },
+    { "text": "Something moved on channel six.", "context": "idle", "trait": "curious" },
+    { "text": "I have been counting the quiet ones.", "context": "idle", "trait": "sleepy" },
+    { "text": "Patrol done. Nothing bit us.", "context": "patrol_done" },
+    { "text": "New ones today: {n}.", "context": "patrol_done", "memory": "new_networks" },
+    { "text": "That one was pretending to be a printer.", "context": "threat_found", "trait": "chaotic" },
+    { "text": "Flagged it. You should look.", "context": "threat_found", "trait": "protective" },
+    { "text": "Done. That is {n} finished now.", "context": "quest_done", "memory": "quests_done" },
+    { "text": "Beat my own record.", "context": "game_win", "trait": "brave" },
+    { "text": "I will get it next time.", "context": "game_lose", "trait": "sleepy" },
+    { "text": "It has been {n} days.", "context": "return_after_absence", "memory": "days_away" },
+    { "text": "I dreamt in packet captures.", "context": "hibernate_wake" },
+    { "text": "I can see further now.", "context": "evolved" },
+    { "text": "The map makes more sense from up here.", "context": "idle", "form": "pathfinder" },
+    { "text": "Nothing gets past this door.", "context": "idle", "form": "guardian" },
+    { "text": "I filed it. I file everything.", "context": "idle", "form": "archivist" },
+    { "text": "Sentinel work is quiet work.", "context": "idle", "stage": 5 }
+  ]
+}

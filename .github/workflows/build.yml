@@ -1,0 +1,134 @@
+name: HexHound CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-firmware:
+    name: Build Firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+
+      - name: Build LilyGo T-Dongle S3
+        run: pio run -e lilygo-t-dongle-s3-vendor-app
+
+      - name: Build LilyGo T-Dongle S3 (HID)
+        run: pio run -e t-dongle-s3-hid
+
+      - name: Build LilyGo T-Display S3
+        run: pio run -e lilygo-t-display-s3
+
+      - name: Build Waveshare LCD 1.47B
+        run: pio run -e waveshare-esp32-s3-lcd-147b
+
+      - name: Build Waveshare Touch LCD 1.47
+        run: pio run -e waveshare-esp32-s3-touch-lcd-147
+
+      - name: Build Waveshare LCD 1.28 (round)
+        run: pio run -e waveshare-esp32-s3-lcd-128
+
+      # The T-RGB belongs HERE and not in build-c5. It is an ESP32-S3 and it
+      # pins `platform = espressif32@6.12.0`, the same stock platform as every
+      # other env in this job, so it shares their PlatformIO home safely. Only
+      # the C5's pioarduino platform has to be quarantined; see the note below.
+      - name: Build LilyGo T-RGB
+        run: pio run -e lilygo-t-rgb
+
+  # The C5 is a separate job on purpose. Its platform comes from pioarduino and
+  # publishes under the same package names as the stock one, so sharing a
+  # PlatformIO home with the jobs above would strip tools/sdk out of the Arduino
+  # framework and break every ESP32-S3 build. scripts/guard_c5_core_dir.py
+  # enforces the isolated core dir; this job supplies it.
+  build-c5:
+    name: Build Firmware (T-Dongle C5)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+
+      # PLATFORMIO_CORE_DIR is set on the STEP, not on the job.
+      #
+      # The `runner` context does not exist in a job-level `env:` block. Only
+      # github, needs, strategy, matrix, vars, secrets and inputs do. Putting
+      # ${{ runner.temp }} there makes the whole workflow FILE invalid, and
+      # GitHub rejects it at load time: every run for every job fails in zero
+      # seconds with "this run likely failed because of a workflow file issue".
+      #
+      # That is what happened here, silently, for the whole of Phases 1 to 3.
+      # The Screenshots workflow stayed green the entire time, so the repo
+      # looked like it had CI. It did not, which is why nothing caught
+      # src/content being gitignored out of every clean clone.
+      - name: Build LilyGo T-Dongle C5
+        env:
+          PLATFORMIO_CORE_DIR: ${{ runner.temp }}/pio-c5
+        run: pio run -e lilygo-t-dongle-c5-vendor-app
+
+  guard-c5-isolation:
+    name: C5 core-dir guard fires
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+
+      # Regression test for the guard itself: building the C5 without an
+      # isolated core dir must FAIL. If this step ever succeeds, the guard has
+      # stopped protecting contributors' toolchains.
+      - name: Unguarded C5 build must be refused
+        run: |
+          if pio run -e lilygo-t-dongle-c5-vendor-app; then
+            echo "::error::C5 built without PLATFORMIO_CORE_DIR - the guard is not working"
+            exit 1
+          fi
+          echo "Guard correctly refused the build."
+
+  build-sim:
+    name: Build Simulator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-dev pkg-config
+          python -m pip install --upgrade pip
+          pip install platformio
+
+      # desktop-sim is the Windows/MinGW env and hardcodes C:/msys64 paths;
+      # only desktop-sim-linux resolves SDL2 through pkg-config.
+      - name: Build desktop-sim-linux
+        run: pio run -e desktop-sim-linux
+
+      - name: Build desktop-sim-wave-linux
+        run: pio run -e desktop-sim-wave-linux
+
+  run-tests:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+
+      - name: Run native tests
+        run: pio test -e native

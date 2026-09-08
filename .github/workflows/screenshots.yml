@@ -1,0 +1,43 @@
+name: Screenshots
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  capture-screenshots:
+    name: Capture Screenshots
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-dev pkg-config xvfb
+          python -m pip install --upgrade pip
+          pip install platformio Pillow
+
+      - name: Build simulator
+        run: pio run -e desktop-sim-linux
+
+      - name: Capture screenshots
+        run: |
+          xvfb-run python scripts/capture_screens.py
+
+      - name: Commit updated screenshots
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p docs/screenshots
+          git add -A docs/screenshots
+          if git diff --cached --quiet; then
+            echo "No screenshot changes"
+          else
+            git commit -m "Update screenshots [automated]"
+            git push
+          fi
