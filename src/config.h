@@ -165,13 +165,37 @@ enum Trait : uint8_t {
     TRAIT_COUNT
 };
 
-// Evolution stages
+// -- Stage list: the single source of truth for every per-stage table -----
+//
+// Before this there were FIVE parallel per-stage structures across three
+// files: STAGE_NAMES (upper), PetCore::stageName() (mixed), STAGE_TAG (three
+// glyphs, in ui_inventory.cpp), STAGE_ABILITY and STAGE_COLOR. A rename had to
+// find all five, and one did not: the 2026-08-30 company scrub fixed
+// STAGE_NAMES and left a company-initialled name on the home screen for two days, because
+// it searched for the full name and the other table said something shorter.
+//
+// Every spelling of a stage now sits on ONE line. A partial rename shows up in
+// the diff instead of on the glass, and a stage cannot be added to the enum
+// without adding its row here, because the enum is generated from this list.
+//
+// Columns: enumerator, UPPER name, Mixed name, 3-glyph tag, ability, color.
+//
+// Expansions must not reorder this list. Stages are 1-based and every table is
+// indexed [stage - 1]; saved pet state stores the numeric value.
+#define HH_STAGE_LIST(X) \
+    X(STAGE_EGG,          "EGG",          "Egg",          "EGG", "",                       0x8410) \
+    X(STAGE_PACKET_PUP,   "PACKET PUP",   "Packet Pup",   "PUP", "WIFI RECONNAISSANCE",    0x07FF) \
+    X(STAGE_BEACON_BEAST, "BEACON BEAST", "Beacon Beast", "BST", "BLE BEACON DETECTION",   0xFD20) \
+    X(STAGE_GREMLIN,      "GREMLIN MODE", "Gremlin Mode", "GRM", "USB AWARENESS MISSIONS", 0x07E0) \
+    X(STAGE_SENTINEL,     "SENTINEL",     "Sentinel",     "SNT", "ANOMALY DETECTION",      0xF800)
+
+// Evolution stages. STAGE__BASE is not a stage: it exists so the generated
+// enumerators start at 1, which is the value saved pet state already holds.
 enum PetStage : uint8_t {
-    STAGE_EGG = 1,
-    STAGE_PACKET_PUP,
-    STAGE_BEACON_BEAST,
-    STAGE_GREMLIN,
-    STAGE_SENTINEL
+    STAGE__BASE = 0,
+#define HH_STAGE_ENUMERATOR(e, u, m, t, a, c) e,
+    HH_STAGE_LIST(HH_STAGE_ENUMERATOR)
+#undef HH_STAGE_ENUMERATOR
 };
 
 // Notification levels
@@ -215,29 +239,50 @@ enum Screen : uint8_t {
 
 // ── Stage metadata (names, abilities, colors) ────────────────────────────
 
-// Stage display names (indexed by PetStage - 1)
-static const char* const STAGE_NAMES[] = {
-    "EGG",
-    "PACKET PUP",
-    "BEACON BEAST",
-    "GREMLIN MODE",
-    "SENTINEL"
-};
+// All three generated from HH_STAGE_LIST above, in list order, and all three
+// indexed by PetStage - 1.
+
+// Stage display names, upper case (indexed by PetStage - 1)
+#define HH_STAGE_NAME(e, u, m, t, a, c) u,
+static const char* const STAGE_NAMES[] = { HH_STAGE_LIST(HH_STAGE_NAME) };
+#undef HH_STAGE_NAME
 
 // Ability unlocked per stage
-static const char* const STAGE_ABILITY[] = {
-    "",                        // Egg - no ability
-    "WIFI RECONNAISSANCE",     // Packet Pup
-    "BLE BEACON DETECTION",    // Beacon Beast
-    "USB AWARENESS MISSIONS",  // Gremlin Mode
-    "ANOMALY DETECTION"        // Sentinel
-};
+#define HH_STAGE_ABILITY(e, u, m, t, a, c) a,
+static const char* const STAGE_ABILITY[] = { HH_STAGE_LIST(HH_STAGE_ABILITY) };
+#undef HH_STAGE_ABILITY
 
 // RGB565 accent color per stage
-static const uint16_t STAGE_COLOR[] = {
-    0x8410,   // Egg - mid gray
-    0x07FF,   // Packet Pup - cyan
-    0xFD20,   // Beacon Beast - amber
-    0x07E0,   // Gremlin Mode - green
-    0xF800    // Sentinel - red
-};
+#define HH_STAGE_COLOR(e, u, m, t, a, c) c,
+static const uint16_t STAGE_COLOR[] = { HH_STAGE_LIST(HH_STAGE_COLOR) };
+#undef HH_STAGE_COLOR
+
+// A table one row short is an out-of-bounds read at a dozen unguarded
+// [stage - 1] call sites, so bind every table's length to the last enumerator.
+// STAGE_SENTINEL is both the highest stage value and the number of stages,
+// because the enumerators start at 1.
+static_assert(sizeof(STAGE_NAMES)   / sizeof(STAGE_NAMES[0])   == STAGE_SENTINEL,
+              "STAGE_NAMES must have exactly one entry per stage");
+static_assert(sizeof(STAGE_ABILITY) / sizeof(STAGE_ABILITY[0]) == STAGE_SENTINEL,
+              "STAGE_ABILITY must have exactly one entry per stage");
+static_assert(sizeof(STAGE_COLOR)   / sizeof(STAGE_COLOR[0])   == STAGE_SENTINEL,
+              "STAGE_COLOR must have exactly one entry per stage");
+
+// ui_evolve.cpp sizes the cutscene title from the longest stage name and says
+// so only in a comment: "The longest name at size 2 is 144px (BEACON BEAST)".
+// A comment is not a control. Twelve characters is what that layout was
+// measured against on a 160px panel, so exceeding it is a compile error rather
+// than a title that runs off both edges.
+#define HH_STAGE_NAME_FITS(e, u, m, t, a, c) sizeof(u) - 1 <= 12 &&
+static_assert(HH_STAGE_LIST(HH_STAGE_NAME_FITS) true,
+              "a stage name is longer than 12 chars; re-measure the evolution "
+              "cutscene title on the 160px panel before raising this");
+#undef HH_STAGE_NAME_FITS
+
+// ui_inventory.cpp pads its locked-recipe column to a fixed width on the
+// assumption that every tag is three glyphs.
+#define HH_STAGE_TAG_FITS(e, u, m, t, a, c) sizeof(t) == 4 &&
+static_assert(HH_STAGE_LIST(HH_STAGE_TAG_FITS) true,
+              "a stage tag is not exactly 3 characters; ui_inventory.cpp's "
+              "right-hand column assumes a fixed width");
+#undef HH_STAGE_TAG_FITS

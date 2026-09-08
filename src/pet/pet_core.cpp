@@ -366,13 +366,16 @@ float PetCore::traitMultiplier(Trait t) const {
 }
 
 const char* PetCore::stageName() const {
+    // Generated from HH_STAGE_LIST (config.h) so the mixed-case names cannot
+    // drift from the upper-case ones in STAGE_NAMES. This stays a switch
+    // rather than becoming a lookup into a second table: a switch needs no
+    // bounds check to be safe on a corrupt stage value, and generating it
+    // emits exactly the code that was here before.
     switch (_state.stage) {
-        case STAGE_EGG:          return "Egg";
-        case STAGE_PACKET_PUP:   return "Packet Pup";
-        case STAGE_BEACON_BEAST: return "Beacon Beast";
-        case STAGE_GREMLIN:      return "Gremlin Mode";
-        case STAGE_SENTINEL:     return "Sentinel";
-        default:                 return "Unknown";
+#define HH_STAGE_CASE(e, u, m, t, a, c) case e: return m;
+        HH_STAGE_LIST(HH_STAGE_CASE)
+#undef HH_STAGE_CASE
+        default: return "Unknown";
     }
 }
 

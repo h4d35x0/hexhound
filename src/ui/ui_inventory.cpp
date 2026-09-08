@@ -46,7 +46,12 @@ const uint16_t* itemIconFor(uint8_t itemId) {
 
 // Stage abbreviations for a locked recipe's right-hand column. Three glyphs so
 // the column costs the same on every row, indexed by PetStage - 1.
-static const char* const STAGE_TAG[] = { "EGG", "PUP", "BST", "GRM", "SNT" };
+// Generated from HH_STAGE_LIST (config.h). These abbreviations are why a
+// rename can miss a table: searching for "Sentinel" never finds "SNT". They
+// now live on the same line as the full names.
+#define HH_STAGE_TAG(e, u, m, t, a, c) t,
+static const char* const STAGE_TAG[] = { HH_STAGE_LIST(HH_STAGE_TAG) };
+#undef HH_STAGE_TAG
 
 static const char* stageTag(uint8_t stage) {
     if (stage < STAGE_EGG || stage > STAGE_SENTINEL) return "---";
