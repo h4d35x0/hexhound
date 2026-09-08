@@ -676,3 +676,58 @@ an observation. A host failing enumeration and re-driving the port produces the
 identical symptom with nothing resetting at all. On Windows that appears as
 "Unknown USB Device (Device Descriptor Request Failed)". The reset-reason line
 settles it in one boot, which is what the diagnostic env is for.
+
+## 2026-09-08: the confirm-gate suite had never linked, and CI had been red for days
+
+### What was wrong
+
+`pio test -e native` failed on every run from the moment `test_mission_confirm`
+landed. All four build jobs passed; only "Run Tests" failed, and inside it 19 of
+the 20 suites passed. The twentieth ERRORED with undefined references to
+`UIMissions::instance/init/drawBriefing/longPressShouldExecute` and
+`USBModule::instance/getMission`.
+
+`[env:native]` sets `test_build_src = no` and `build_src_filter = -<*>`, so the
+test runner compiles no project sources whatsoever. Every suite pulls in the
+implementations it needs by `#include`-ing the `.cpp` itself. This suite
+included only `ui_missions.h` and `usb_module.h`, so it could not link.
+
+### Why it mattered more than a red badge
+
+The suite is the test coverage for the GUI-keys confirm gate, the control in
+front of the two missions that press the host's GUI modifier. Item H closes
+with "Covered by `test/test_mission_confirm/`, 29 cases, mutation verified."
+That sentence was true on one developer machine and false everywhere else: the
+suite could not link under `pio test`, so on the shared runner it covered
+nothing at all.
+
+The gate's own two mechanisms were never affected and both still hold: the gate
+itself in `longPressShouldExecute()`, and the compile-time backstop of
+`executeMission()` taking a `GuiKeyConsent` with no default. The consent
+backstop is what would actually have caught a deleted gate, and it is a
+compile error, not a test. What was missing was the evidence that the gate's
+own state machine still behaves: which hold arms, which runs, and every way an
+arm is supposed to expire.
+
+### The fix
+
+The four sources it needs are included below the fake HAL singletons rather
+than beside the headers at the top of the file. Placement is load-bearing:
+under `-DUNIT_TEST`, `event_bus.cpp` includes no Arduino and no simulator
+header at all, on the assumption that the suite already defined `Serial`, and
+that only becomes true partway down the file.
+
+### The thing that hid it
+
+`scripts/run_native_suites.sh` carried a special case giving this one suite
+different flags and passing its four sources as separate translation units. It
+therefore ran green locally while CI could not link it at all. That special
+case is removed and every suite now builds exactly the way CI builds it.
+
+A local runner that is allowed to differ from CI is not a check, it is a second
+opinion that always agrees with you.
+
+### Verified
+
+20 suites, 439 cases, 0 failed, through the runner with `[env:native]`'s flags.
+`test_mission_confirm` on its own: 29 passed, 0 failed.

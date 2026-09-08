@@ -149,6 +149,13 @@ the host's window manager", so there is no field that marks the dangerous two.
       missions back to a single hold. Omitting consent is now a compile error.
       Covered by `test/test_mission_confirm/`, 29 cases, mutation verified.
 
+      **Correction, 2026-09-08.** That coverage claim was true locally and
+      false in CI for the whole time it stood there. The suite included the two
+      headers but not the implementations, and `[env:native]` compiles no
+      project sources, so it failed to LINK on every CI run and its cases never
+      executed there. Fixed, and the local runner's special case for it removed
+      so the two cannot diverge again. See `docs/bugfix_log.md`, 2026-09-08.
+
 - [x] **Confirmed on glass, 2026-09-04.** Mission 4 was run on the T-RGB from
       the `lilygo-t-rgb-hid` image and takes TWO holds. The first arms and
       repaints; it does not reach the host. That is the defect closed, on the
