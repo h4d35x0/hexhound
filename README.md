@@ -25,6 +25,11 @@ earn XP, and evolve from an Egg into a Sentinel.
 <p align="center">
   <em>A patrol on the 320x172 panel: scan, flag a tracker candidate, bank the XP, evolve.</em>
 </p>
+<p align="center">
+  <a href="https://github.com/h4d35x0/hexhound/releases/latest">Full-quality demo video</a>
+  (69s, 1080p, no audio) is attached to the latest release, in square and vertical cuts.
+  The clip above is a size-reduced GIF so the repository stays small to clone.
+</p>
 
 ## What HexHound does
 
