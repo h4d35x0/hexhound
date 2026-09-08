@@ -15,7 +15,7 @@ Ordered by whether a wearer can see it.
 Found while doing something else and deliberately NOT fixed. Each says what it
 is and what a fix has to prove.
 
-## A. Two parallel stage-name tables
+## A. CLOSED 2026-09-08. Parallel stage-name tables (there were five, not two)
 
 `STAGE_NAMES` (config.h, uppercase) feeds the evolution cutscene, the boot
 detail line and the journal. `PetCore::stageName()` (pet_core.cpp, mixed case)
@@ -24,9 +24,40 @@ same five strings, and that is exactly why a 203-file company-name scrub fixed
 one and left a company-initialled name sitting on the most-viewed screen in the product for
 two days.
 
-- [ ] Consolidating them changes strings on every board and is a design call
-      about capitalisation, not a cleanup. The defect it caused is fixed; the
-      structure that caused it is not.
+- [x] **Done, and the count above was wrong.** There were FIVE per-stage
+      structures across three files, not two: add `STAGE_TAG` in
+      `ui_inventory.cpp` (three-glyph abbreviations), `STAGE_ABILITY` and
+      `STAGE_COLOR`. The abbreviations are the dangerous ones, and the reason
+      this item understated the problem: searching for "Sentinel" never finds
+      "SNT", so an audit looking for the full name counts two tables and misses
+      the third.
+
+- [x] **It was never a design call about capitalisation.** The lists are
+      identical modulo case, so nothing was in conflict and no decision was
+      needed. The real hazard was a table one row short, because
+      `STAGE_NAMES[stage - 1]` is read at a dozen call sites with no bounds
+      check. Framing it as a capitalisation question is probably why it stayed
+      open.
+
+- [x] One `HH_STAGE_LIST` in `config.h` now carries the enumerator and all five
+      presentations per stage on a single line, expanded into the enum and
+      every table. Both capitalisations survive and nothing on screen changed.
+      Five `static_assert`s bind the table lengths to the enum and turn two
+      layout assumptions that were only comments into compile errors; all five
+      were mutation tested.
+
+- [x] **Verified free.** All 7 CI firmware images rebuilt identical in size
+      with 64 to 65 differing bytes, which is the build stamp that always
+      differs. 20 suites, 439 cases, 0 failed.
+
+- [ ] **Deliberately still open: the raw `[stage - 1]` reads are unguarded.**
+      A dozen call sites index `STAGE_NAMES`/`STAGE_ABILITY`/`STAGE_COLOR`
+      directly; only `ui_inventory.cpp`'s `stageTag()` range-checks. The
+      static_asserts make a SHORT TABLE impossible, which is the likelier bug,
+      but a corrupt saved stage value is still an out-of-bounds read. Left out
+      of the consolidation on purpose: a guarded accessor moves every image, and
+      bundling it would have cost the byte-identity invariant as evidence that
+      the consolidation itself was free. Separate change, separately measured.
 
 ## B. Anything that changes a string changes ~1 KB of every image
 
