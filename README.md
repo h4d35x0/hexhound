@@ -19,11 +19,12 @@ earn XP, and evolve from an Egg into a Sentinel.
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 <p align="center">
-  <img src="docs/screenshots/hexhound-demo.gif" width="720"
-       alt="HexHound patrol: radar scan, BLE tracker warning, patrol results with XP, then the evolution cutscene to Sentinel">
+  <img src="docs/screenshots/hexhound-demo.gif" width="440"
+       alt="HexHound on the 480x480 round board: crafting from patrol salvage, dressing the pet, furnishing its den, a Wi-Fi and BLE patrol, two minigames, and the security missions Gremlin Mode unlocks">
 </p>
 <p align="center">
-  <em>A patrol on the 320x172 panel: scan, flag a tracker candidate, bank the XP, evolve.</em>
+  <em>The 480x480 round board: craft from patrol salvage, dress the pet, furnish its den,
+  run a Wi-Fi and BLE patrol, then the security missions Gremlin Mode unlocks.</em>
 </p>
 <p align="center">
   <a href="https://github.com/h4d35x0/hexhound/releases/latest">Full-quality demo video</a>
