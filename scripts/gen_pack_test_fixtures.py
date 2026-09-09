@@ -156,8 +156,18 @@ def main():
          "One stray byte after a complete document. Signed, so not an attack\n"
          "by itself, but the pack is not what the signer thought it was.")
 
-    # The real development key, checked against the compiled-in trusted list.
+    # The signing key whose packs are checked against the compiled-in trusted
+    # list. Overridable, because once a RELEASE key is installed the private
+    # half deliberately does not live in this repository any more: it sits in a
+    # vault, and regenerating this fixture means fetching it to a temporary path
+    # and passing it here.
+    #     python scripts/gen_pack_test_fixtures.py --key /path/to/seed
     dev_key_path = os.path.join(REPO, "keys", "content-dev-signing.key")
+    for i, a in enumerate(sys.argv):
+        if a == "--key" and i + 1 < len(sys.argv):
+            dev_key_path = sys.argv[i + 1]
+        elif a.startswith("--key="):
+            dev_key_path = a.split("=", 1)[1]
     if os.path.exists(dev_key_path):
         dev_seed = scp.read_key(dev_key_path)
         dev_pk = scp.ed25519_public_key(dev_seed)
@@ -171,7 +181,7 @@ def main():
              "If this test fails after a key rotation, regenerate:\n"
              "  python scripts/gen_pack_test_fixtures.py")
         parts.append("#define FIX_HAVE_DEVKEY 1")
-        parts.append("// Development key id: %s" % scp.key_id(dev_pk).hex())
+        parts.append("// Trusted-list fixture key id: %s" % scp.key_id(dev_pk).hex())
         parts.append("")
     else:
         parts.append("// No keys/content-dev-signing.key present, so the")
