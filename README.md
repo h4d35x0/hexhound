@@ -91,6 +91,9 @@ confirmed working; everything else compiles but is unverified on real hardware.
   patrols Wi-Fi, but its BLE column stays Untested. BLE discovery does not
   unlock until Beacon Beast at 300 XP, so a board that has not been raised that
   far has not had the capability available to test.
+- **The Waveshare Touch 1.47 is unvalidated because no unit is available**, not
+  because it is known to be broken or because validation is pending. Nobody
+  working on HexHound owns one. It is the only board in that position.
 
 > **The round boards share one layout family** (`src/ui/ui_round.*`):
 > chord-aware text, rim arc gauges, a circular alert border. It is selected at
@@ -377,8 +380,11 @@ requires a physical connection and an explicitly selected mission.
 - The T-RGB's SD slot is SDMMC and is not implemented; it is declared absent.
 - The T-RGB parks in the ROM download mode after every flash and needs a
   manual reset. Expected on this board, not a failed flash.
-- One board target, the Waveshare Touch 1.47, compiles but has never been run
-  on physical hardware.
+- The Waveshare Touch 1.47 has never been run on physical hardware, because
+  nobody working on HexHound owns one. It is supported in code and it builds in
+  CI, but nothing about it is confirmed on a real panel, and its Wi-Fi, BLE,
+  battery and touch columns are all unverified. If you own one, you would be
+  the first to run it, and a report either way is genuinely useful.
 - BLE tracker detection is **heuristic**. A flagged device is a candidate for
   review, not proof that anything is tracking you.
 - Wi-Fi patrols are passive discovery. They do not test authentication, capture
@@ -389,7 +395,6 @@ requires a physical connection and an explicitly selected mission.
 ## Roadmap
 
 - Merge HID support onto the vendor display backend
-- Validate the Waveshare Touch 1.47 on hardware, the last unverified board
 - macOS/Linux variants of the Windows-only missions
 - Shared SPI bus implementation to enable C5 SD storage
 - Expanded tracker heuristics
