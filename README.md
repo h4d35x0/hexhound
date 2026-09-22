@@ -9,9 +9,9 @@ earn XP, and evolve from an Egg into a Sentinel.
 > **Project status: active alpha.**
 > Wi-Fi and BLE patrols, pet progression, persistence, hardware diagnostics and
 > the desktop simulator are working. USB HID missions require a **separate
-> firmware build** and are not part of the recommended T-Dongle S3 image. Four
-> of the seven board targets are validated on physical hardware; the rest
-> compile but are unverified. See [Known limitations](#known-limitations).
+> firmware build** and are not part of the recommended T-Dongle S3 image. Six
+> of the seven board targets are validated on physical hardware; the last one
+> compiles but is unverified. See [Known limitations](#known-limitations).
 
 [![Build](https://github.com/h4d35x0/hexhound/actions/workflows/build.yml/badge.svg)](https://github.com/h4d35x0/hexhound/actions/workflows/build.yml)
 ![Platform](https://img.shields.io/badge/platform-ESP32--S3%20%7C%20ESP32--C5-blue)
@@ -67,9 +67,9 @@ confirmed working; everything else compiles but is unverified on real hardware.
 | [LilyGo T-Dongle S3](https://github.com/Xinyuan-LilyGO/T-Dongle-S3) | **Yes** | Yes | Yes | Separate build | No | No | No | Yes |
 | [Waveshare 1.47B](https://www.waveshare.com/wiki/ESP32-S3-LCD-1.47B) | **Yes** | Yes | Yes | No build provided | No | No | No | Yes |
 | [Waveshare 1.28 round](https://www.waveshare.com/wiki/ESP32-S3-LCD-1.28) | **Yes** | Yes | Yes | Unavailable | Yes | No | Yes | No |
-| [LilyGo T-Display S3](https://github.com/Xinyuan-LilyGO/T-Display-S3) | No | Untested | Untested | No build provided | Yes | No | No | No |
+| [LilyGo T-Display S3](https://github.com/Xinyuan-LilyGO/T-Display-S3) | **Yes** | Untested | Untested | No build provided | Yes | No | No | No |
 | [Waveshare Touch 1.47](https://docs.waveshare.com/ESP32-S3-Touch-LCD-1.47) | No | Untested | Untested | No build provided | Yes | Yes | No | No |
-| [LilyGo T-Dongle C5](https://github.com/Xinyuan-LilyGO/T-Dongle-C5) | No | Untested | Untested | No build provided | No | No | No | Unavailable |
+| [LilyGo T-Dongle C5](https://github.com/Xinyuan-LilyGO/T-Dongle-C5) | **Yes** | Untested | Untested | No build provided | No | No | No | Unavailable |
 | [LilyGo T-RGB 2.1in round](https://github.com/Xinyuan-LilyGO/T-RGB) | **Yes** | Yes | Yes | Separate build | Yes | **Yes** | No | Unavailable |
 
 - **Separate build** - the capability exists but needs a dedicated HID
@@ -84,6 +84,12 @@ confirmed working; everything else compiles but is unverified on real hardware.
   this codebase - so it is declared absent rather than mis-declared as SPI.
 - **No build provided** - the chip supports HID, but HexHound ships no HID
   environment for that board.
+- **Validated is about the board booting and running the pet**, confirmed on
+  the panel rather than over serial, because a board flashed with the wrong
+  target prints a clean boot log while the screen stays dark. It is not a claim
+  about every feature column in the same row: the T-Display S3 and the T-Dongle
+  C5 both run, but their Wi-Fi and BLE patrols are still marked Untested
+  because nobody has exercised them on those two boards.
 
 > **The round boards share one layout family** (`src/ui/ui_round.*`):
 > chord-aware text, rim arc gauges, a circular alert border. It is selected at
@@ -370,7 +376,8 @@ requires a physical connection and an explicitly selected mission.
 - The T-RGB's SD slot is SDMMC and is not implemented; it is declared absent.
 - The T-RGB parks in the ROM download mode after every flash and needs a
   manual reset. Expected on this board, not a failed flash.
-- Three board targets compile but have never been run on physical hardware.
+- One board target, the Waveshare Touch 1.47, compiles but has never been run
+  on physical hardware.
 - BLE tracker detection is **heuristic**. A flagged device is a candidate for
   review, not proof that anything is tracking you.
 - Wi-Fi patrols are passive discovery. They do not test authentication, capture
