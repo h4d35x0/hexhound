@@ -69,7 +69,7 @@ confirmed working; everything else compiles but is unverified on real hardware.
 | [Waveshare 1.28 round](https://www.waveshare.com/wiki/ESP32-S3-LCD-1.28) | **Yes** | Yes | Yes | Unavailable | Yes | No | Yes | No |
 | [LilyGo T-Display S3](https://github.com/Xinyuan-LilyGO/T-Display-S3) | **Yes** | Yes | Yes | No build provided | Yes | No | No | No |
 | [Waveshare Touch 1.47](https://docs.waveshare.com/ESP32-S3-Touch-LCD-1.47) | No | Untested | Untested | No build provided | Yes | Yes | No | No |
-| [LilyGo T-Dongle C5](https://github.com/Xinyuan-LilyGO/T-Dongle-C5) | **Yes** | Untested | Untested | No build provided | No | No | No | Unavailable |
+| [LilyGo T-Dongle C5](https://github.com/Xinyuan-LilyGO/T-Dongle-C5) | **Yes** | Yes | Untested | No build provided | No | No | No | Unavailable |
 | [LilyGo T-RGB 2.1in round](https://github.com/Xinyuan-LilyGO/T-RGB) | **Yes** | Yes | Yes | Separate build | Yes | **Yes** | No | Unavailable |
 
 - **Separate build** - the capability exists but needs a dedicated HID
@@ -87,9 +87,10 @@ confirmed working; everything else compiles but is unverified on real hardware.
 - **Validated is about the board booting and running the pet**, confirmed on
   the panel rather than over serial, because a board flashed with the wrong
   target prints a clean boot log while the screen stays dark. It is not a claim
-  about every feature column in the same row: the T-Dongle C5 runs the pet, but
-  its Wi-Fi and BLE columns stay Untested because nobody has run a patrol on
-  that board yet.
+  about every feature column in the same row: the T-Dongle C5 runs the pet and
+  patrols Wi-Fi, but its BLE column stays Untested. BLE discovery does not
+  unlock until Beacon Beast at 300 XP, so a board that has not been raised that
+  far has not had the capability available to test.
 
 > **The round boards share one layout family** (`src/ui/ui_round.*`):
 > chord-aware text, rim arc gauges, a circular alert border. It is selected at
@@ -388,10 +389,9 @@ requires a physical connection and an explicitly selected mission.
 ## Roadmap
 
 - Merge HID support onto the vendor display backend
-- Validate T-Display S3, Waveshare Touch 1.47 and T-Dongle C5 on hardware
+- Validate the Waveshare Touch 1.47 on hardware, the last unverified board
 - macOS/Linux variants of the Windows-only missions
 - Shared SPI bus implementation to enable C5 SD storage
-- Signed firmware releases
 - Expanded tracker heuristics
 - HD art for the six remaining pet animations (idle is done on the 480 panel)
 
