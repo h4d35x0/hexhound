@@ -67,7 +67,7 @@ confirmed working; everything else compiles but is unverified on real hardware.
 | [LilyGo T-Dongle S3](https://github.com/Xinyuan-LilyGO/T-Dongle-S3) | **Yes** | Yes | Yes | Separate build | No | No | No | Yes |
 | [Waveshare 1.47B](https://www.waveshare.com/wiki/ESP32-S3-LCD-1.47B) | **Yes** | Yes | Yes | No build provided | No | No | No | Yes |
 | [Waveshare 1.28 round](https://www.waveshare.com/wiki/ESP32-S3-LCD-1.28) | **Yes** | Yes | Yes | Unavailable | Yes | No | Yes | No |
-| [LilyGo T-Display S3](https://github.com/Xinyuan-LilyGO/T-Display-S3) | **Yes** | Untested | Untested | No build provided | Yes | No | No | No |
+| [LilyGo T-Display S3](https://github.com/Xinyuan-LilyGO/T-Display-S3) | **Yes** | Yes | Yes | No build provided | Yes | No | No | No |
 | [Waveshare Touch 1.47](https://docs.waveshare.com/ESP32-S3-Touch-LCD-1.47) | No | Untested | Untested | No build provided | Yes | Yes | No | No |
 | [LilyGo T-Dongle C5](https://github.com/Xinyuan-LilyGO/T-Dongle-C5) | **Yes** | Untested | Untested | No build provided | No | No | No | Unavailable |
 | [LilyGo T-RGB 2.1in round](https://github.com/Xinyuan-LilyGO/T-RGB) | **Yes** | Yes | Yes | Separate build | Yes | **Yes** | No | Unavailable |
@@ -87,9 +87,9 @@ confirmed working; everything else compiles but is unverified on real hardware.
 - **Validated is about the board booting and running the pet**, confirmed on
   the panel rather than over serial, because a board flashed with the wrong
   target prints a clean boot log while the screen stays dark. It is not a claim
-  about every feature column in the same row: the T-Display S3 and the T-Dongle
-  C5 both run, but their Wi-Fi and BLE patrols are still marked Untested
-  because nobody has exercised them on those two boards.
+  about every feature column in the same row: the T-Dongle C5 runs the pet, but
+  its Wi-Fi and BLE columns stay Untested because nobody has run a patrol on
+  that board yet.
 
 > **The round boards share one layout family** (`src/ui/ui_round.*`):
 > chord-aware text, rim arc gauges, a circular alert border. It is selected at
