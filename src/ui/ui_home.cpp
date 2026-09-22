@@ -90,7 +90,22 @@ void UIHome::draw(bool forceRedraw) {
         _lastEnergy   = st.energy;
         _lastBatteryPct = batteryPct;
 
-        _tft->fillScreen(COL_BG);
+        // Only a full redraw clears the panel. A stats-only refresh repaints
+        // the same fields in place, which is what drawRound() below has always
+        // done for the round boards; the rectangular path was simply never
+        // brought in line with it. Clearing the whole screen is what made the
+        // panel visibly flash every 30 s, because TICK_INTERVAL_MS decay always
+        // moves hunger, so statsChanged is true on every single tick forever.
+        //
+        // Nothing here needs the clear: every text draw is opaque (setTextColor
+        // carries COL_BG), drawStatBar paints its own bar background, and the
+        // sprite block below clears its own slot and keeps its own flourish
+        // erase record. The one thing a clear did buy was erasing the tail of a
+        // value that got shorter, and the fixed-width formats below do that
+        // instead.
+        if (forceRedraw) {
+            _tft->fillScreen(COL_BG);
+        }
 
         const char* traitNames[] = {
             "Curious", "Protect", "Chaotic", "Sleepy", "Greedy", "Brave"
@@ -110,7 +125,7 @@ void UIHome::draw(bool forceRedraw) {
             if (batteryPct >= 0) {
                 _tft->setTextColor(COL_TEXT, COL_BG);
                 _tft->setCursor(SCREEN_W - 52, 6);
-                _tft->printf("BAT %d%%", batteryPct);
+                _tft->printf("BAT %3d%%", batteryPct);
             }
 
             // Stage label (large font)
@@ -123,16 +138,19 @@ void UIHome::draw(bool forceRedraw) {
             // Traits (or mastery title for Sentinel)
             _tft->setTextColor(COL_TEXT, COL_BG);
             _tft->setCursor(6, 46);
+            char traitLine[48];
             if (stage >= STAGE_SENTINEL) {
-                _tft->printf("%s R%u  %s/%s",
-                             pet.masteryTitle(), pet.state().masteryRank + 1,
-                             traitNames[pet.state().traits[0]],
-                             traitNames[pet.state().traits[1]]);
+                snprintf(traitLine, sizeof(traitLine), "%s R%u  %s/%s",
+                         pet.masteryTitle(), pet.state().masteryRank + 1,
+                         traitNames[pet.state().traits[0]],
+                         traitNames[pet.state().traits[1]]);
             } else {
-                _tft->printf("%s / %s",
-                             traitNames[pet.state().traits[0]],
-                             traitNames[pet.state().traits[1]]);
+                snprintf(traitLine, sizeof(traitLine), "%s / %s",
+                         traitNames[pet.state().traits[0]],
+                         traitNames[pet.state().traits[1]]);
             }
+            // 34 columns is 204px at text size 1, clear of the 320px panel.
+            _tft->printf("%-34s", traitLine);
 
             int barY = 60;
 
@@ -143,13 +161,20 @@ void UIHome::draw(bool forceRedraw) {
             // XP / mastery progress
             _tft->setTextColor(COL_XP, COL_BG);
             _tft->setCursor(6, barY + 30);
+            char xpLine[40];
             if (stage >= STAGE_SENTINEL) {
-                _tft->printf("MR %u  %lu/%lu",
-                             pet.state().masteryRank + 1,
-                             masteryCurrent, masteryNeeded);
+                snprintf(xpLine, sizeof(xpLine), "MR %u  %lu/%lu",
+                         pet.state().masteryRank + 1,
+                         (unsigned long)masteryCurrent,
+                         (unsigned long)masteryNeeded);
             } else {
-                _tft->printf("XP %lu/%lu", st.xp, pet.xpForNextStage());
+                snprintf(xpLine, sizeof(xpLine), "XP %lu/%lu",
+                         (unsigned long)st.xp,
+                         (unsigned long)pet.xpForNextStage());
             }
+            // 24 columns is 144px, well clear of the right bar column which
+            // starts at SCREEN_W - 100.
+            _tft->printf("%-24s", xpLine);
 
             // Trust / Mischief / Energy (right column). Leave room on the
             // right for the value text (up to 3 digits) so nothing clips.
@@ -167,7 +192,7 @@ void UIHome::draw(bool forceRedraw) {
             if (batteryPct >= 0) {
                 _tft->setTextColor(COL_TEXT, COL_BG);
                 _tft->setCursor(SCREEN_W - 48, 2);
-                _tft->printf("BAT %d%%", batteryPct);
+                _tft->printf("BAT %3d%%", batteryPct);
             }
 
             // Stage label
@@ -191,14 +216,22 @@ void UIHome::draw(bool forceRedraw) {
             // XP display
             _tft->setTextColor(COL_XP, COL_BG);
             _tft->setCursor(4, barY + 26);
+            char xpLine[40];
             if (stage >= STAGE_SENTINEL) {
-                _tft->printf("MR %u %lu/%lu",
-                             pet.state().masteryRank + 1,
-                             masteryCurrent,
-                             masteryNeeded);
+                snprintf(xpLine, sizeof(xpLine), "MR %u %lu/%lu",
+                         pet.state().masteryRank + 1,
+                         (unsigned long)masteryCurrent,
+                         (unsigned long)masteryNeeded);
             } else {
-                _tft->printf("XP %lu/%lu", st.xp, pet.xpForNextStage());
+                snprintf(xpLine, sizeof(xpLine), "XP %lu/%lu",
+                         (unsigned long)st.xp,
+                         (unsigned long)pet.xpForNextStage());
             }
+            // 13 columns is 78px, stopping just short of the right bar column
+            // at x = 84. A longer mastery line can still overrun that column;
+            // that is pre-existing and is NOT made worse here, because the pad
+            // only ever writes background where the old line already was.
+            _tft->printf("%-13s", xpLine);
 
             // Trust / Mischief / Energy (right column with bars)
             int rx = 84;
@@ -207,9 +240,15 @@ void UIHome::draw(bool forceRedraw) {
             drawStatBar(rx, barY + 24, 30, 6, st.energy,   COL_ENERGY,   "NRG", 22);
         }
 
-        // Force sprite redraw after the panel was cleared
-        _lastDrawnFrame = -1;
-        _hdDrawnStage   = -1;
+        // Force sprite redraw ONLY when the panel was actually cleared. On a
+        // stats-only refresh the sprite is still on the glass and untouched,
+        // so invalidating it here would repaint the pet every 30 s for no
+        // reason - and on the 480 panel that repaint is the most expensive
+        // draw on the board.
+        if (forceRedraw) {
+            _lastDrawnFrame = -1;
+            _hdDrawnStage   = -1;
+        }
     }
 
     // Redraw the pet sprite. On the large display the pet is enlarged and
@@ -639,7 +678,11 @@ void UIHome::drawStatBar(int x, int y, int w, int h, int val,
         _tft->fillRect(barX, y, filled, h, color);
     }
 
-    // Value text
+    // Value text. Fixed width, because the home screen no longer clears the
+    // panel on every stat tick: a value shrinking 100 -> 99 -> 9 has to erase
+    // its own tail. Stats are clamped to STAT_MIN..STAT_MAX (0..100), so three
+    // columns always suffice, and the text is opaque (COL_BG is set above) so
+    // the pad characters paint background over the digits that were there.
     _tft->setCursor(barX + w + 3, y - 1);
-    _tft->printf("%d", val);
+    _tft->printf("%-3d", val);
 }
