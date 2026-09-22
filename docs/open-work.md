@@ -337,9 +337,13 @@ Two consequences worth knowing before diagnosing anything else:
       and is unaffected.
 
 
-# Open before the repository is published
+# Raised before the repository was published
 
-## R. The signing keys are DEVELOPMENT keys, and images built on them shipped
+The repository IS published now, so this heading is a record of when these were
+raised, not a gate still standing in front of anything. Three of the four are
+resolved; item U was opened afterwards and is genuinely open.
+
+## R. CLOSED 2026-09-09. The signing keys are DEVELOPMENT keys, and images built on them shipped
 
 `src/ota/ota_pubkey.h` and `src/content/content_pubkey.h` both carry keys whose
 private halves were minted onto a developer machine and live in gitignored
@@ -352,7 +356,7 @@ sign firmware that every device in the field accepts as genuine, which is the
 entire thing OTA signing exists to prevent. The content key is a smaller blast
 radius: it lets somebody write dialogue.
 
-**The mechanism is now fixed and the key itself is not.**
+**Both halves are now fixed: the mechanism first, then the keys themselves.**
 
 - [x] `deploy_web_flasher.py` REFUSES to publish images that trust a
       development key. Provenance is machine-readable
@@ -366,45 +370,74 @@ radius: it lets somebody write dialogue.
       `--gen-key` mints a private key onto whatever machine runs it, which is
       what makes its output a development key however carefully it is handled
       afterwards.
-- [ ] **Generate the real keypairs somewhere that is not a developer laptop,
-      and decide where the private halves live.** This is a custody decision,
-      not a code change, and it cannot be done from inside this repository:
-      generating them here would reproduce exactly the weakness being fixed.
-      Until it is made, every publish needs `--allow-dev-keys` and every unit
-      flashed from the web page trusts a key that is not fit for the job.
-- [ ] Units already in the field trust the current OTA key. Replacing it is a
-      firmware change, so the rotation has to reach them before the old key is
-      considered retired, or they can never be updated again.
+- [x] **Done 2026-09-09. The real keypairs were minted and the release public
+      halves installed.** The custody decision was made: both private halves
+      live in 1Password and were generated there rather than onto a developer
+      laptop, so neither has ever been in this repository, which is the whole
+      point of `--set-release-pubkey`. Both headers now report release
+      provenance. `src/ota/ota_pubkey.h` carries
+      `#define OTA_KEY_PROVENANCE_DEVELOPMENT 0` and
+      `src/content/content_pubkey.h` carries the same for
+      `CONTENT_KEY_PROVENANCE_DEVELOPMENT`. OTA key id `443c5bc9`, content key
+      id `4b6b07cf`. Every deploy gate now passes with NO `--allow-dev-keys`
+      flag, so shipping a development key is not merely discouraged here any
+      more, it has stopped.
+- [ ] **The one genuine residual: units flashed BEFORE the rotation still
+      trust the old development key.** Nothing new is given one, and the web
+      flasher serves release-keyed images now, but a board flashed from an
+      earlier payload has the old public key compiled into it and will go on
+      accepting firmware signed with the matching private half. Replacing it is
+      a firmware change, so the rotation has to reach those units before the
+      old key can be treated as retired, or they can never be updated again.
 
-## T. The C5 image cannot be built here, so a full eight-board stage is blocked
+## T. WITHDRAWN 2026-09-09. The C5 builds here, and it was blocking nothing
 
-Verified 2026-09-04, and it is an environment fault rather than a code one: the
-C5 build dies compiling `FS.cpp.o`, an Arduino framework file, before it reaches
-any HexHound source. Nothing in this project can have caused it.
+Re-scoped rather than deleted, to match how this document treats an item whose
+premise turned out to be wrong: G was withdrawn in place and the 2026-08-30
+block is kept precisely because three of its five items "were not what this
+document said they were". Deleting T would leave a reader to re-derive that
+from silence, and the surviving half of it is still worth knowing.
 
-Two separate causes were found and only the first is fixed:
+**What it claimed, on 2026-09-04:** that `lilygo-t-dongle-c5-vendor-app` could
+not be built on this machine, because the RISC-V compiler was present in the
+isolated core directory but not registered on PATH, left behind by earlier
+failed `idf_tools.py` runs; and that a complete eight-board stage was blocked
+as a consequence.
 
-- **Git Bash cannot build this target at all.** `idf_tools.py` refuses to run
-  when `MSYSTEM` is set, and the MSys runtime re-injects that variable into
-  every child process, so it cannot be unset from there. Build it from
-  PowerShell or cmd. Written up in `docs/build-and-bench-notes.md`, and the
-  misleading comment in `scripts/build_flashes.py` is corrected.
-- **Unfixed: the RISC-V compiler is not on PATH.** From a native shell the
-  build gets further and then fails with `'riscv32-esp-elf-g++' is not
-  recognized`. The compiler IS present in the isolated core directory under
-  `packages/riscv32-esp-elf/bin/`, so this is a registration problem, probably
-  left behind by the earlier failed `idf_tools.py` runs.
+**Both halves are false now.** The C5 builds: locally and on CI in the full
+eight-image run of 2026-09-09, staged alongside the other seven, and built and
+flashed again on 2026-09-22. The platform is pinned and the isolated core
+directory is populated, so the registration fault is gone. The second half was
+never really true even while the first was. The publish gate does refuse a
+partial picker, but nothing else in this project depends on the C5, so it
+blocked no other work.
 
-- [ ] Repairing it likely means letting the platform reinstall into a clean
-      isolated core directory, which is a large download and has historically
-      been the step that fails behind TLS interception on this machine (the old
-      item E2). Worth attempting on a machine that is not this one before
-      spending the download here.
-- [ ] **Consequence: the flasher cannot be re-staged with a complete board set
-      until this is fixed**, because the publish gate correctly refuses a
-      partial picker. The other eight images all build and link.
+**One piece of the original item survives.** Git Bash cannot build this target
+at all: `idf_tools.py` refuses to run when `MSYSTEM` is set, and the MSys
+runtime re-injects that variable into every child process, so it cannot be
+unset from there. Build it from PowerShell or cmd. Written up in
+`docs/build-and-bench-notes.md`, and the misleading comment in
+`scripts/build_flashes.py` is corrected.
 
-## S. The staged web-flasher payload is stale and lacks the T-RGB
+**Two C5 flashing facts learned 2026-09-22, recorded nowhere else:**
+
+- **Flash it with esptool, not with PlatformIO.** `pio run -t upload` stalls
+  for 10 minutes or more on the C5. Writing `firmware.factory.bin` with
+  `esptool write_flash` directly, at offset 0 with `--after watchdog_reset`,
+  finishes in 16 seconds. The difference is not marginal, and the stall looks
+  like a hung board rather than a slow tool, so anyone who has not been told
+  this will go looking for a hardware fault.
+- **Build and flash the C5 in the SAME command.** It needs its own
+  `PLATFORMIO_CORE_DIR`, and alternating core directories makes PlatformIO
+  wipe `.pio/build` for every other environment. Splitting the build and the
+  flash into two invocations rebuilds from scratch, and interleaving the C5
+  with another board's build destroys that board's tree.
+
+- [x] Withdrawn. Anyone re-reporting a C5 build failure here should check which
+      shell they are in and which `PLATFORMIO_CORE_DIR` is set before
+      concluding the toolchain is broken.
+
+## S. CLOSED 2026-09-09. The staged web-flasher payload is stale and lacks the T-RGB
 
 `web/boards.json` is version 0.4.4 and lists SEVEN boards under ids that no
 longer match `stage_web_flasher.BOARDS`: it still says `t-dongle-s3`,
@@ -416,12 +449,44 @@ So the live flasher does not serve the board this branch exists to add, and the
 publish gate refuses the staged payload as an incomplete board set. That gate
 is working; the payload is what is wrong.
 
-- [ ] Re-stage after a full eight-image build. Note the two failures in
-      `scripts/test_deploy_gates.py` ("clean payload passes every gate" and
-      "--allow-missing-keys permits it, loudly") are BOTH this, not a defect in
-      the gates: they call `preflight()`, which refuses the stale payload
-      before reaching the case under test. They will pass once staging is
-      current.
+- [x] Done. All eight images were built, staged and deployed on 2026-09-09.
+      `web/boards.json` lists eight boards under the ids
+      `stage_web_flasher.BOARDS` actually emits, `t-rgb` among them, and there
+      are eight manifests under `web/manifests/` and eight binaries under
+      `web/firmware/`. The two failures in `scripts/test_deploy_gates.py`
+      ("clean payload passes every gate" and "--allow-missing-keys permits it,
+      loudly") were BOTH this, not a defect in the gates: they call
+      `preflight()`, which refused the stale payload before reaching the case
+      under test.
+- [ ] **The payload is stale AGAIN, for an entirely different reason.** That is
+      tracked as U below rather than reopened here, so that closing this item
+      cannot quietly carry an open problem out with it. The two are not the
+      same defect and should not share a fix.
+
+## U. The staged payload is stale again, and needs re-staging after this branch
+
+Not a reopening of S. S was a payload missing a board and using ids the staging
+code had stopped emitting; that is fixed. This is the ordinary kind of stale.
+`web/firmware/`, `web/manifests/` and `web/boards.json` are all gitignored
+build artifacts, so the staged payload is a snapshot of whatever tree it was
+built from and nothing updates it afterwards.
+
+Measured 2026-09-22: all eight manifests under `web/manifests/` declare
+`"version": "0.4.4"`, as does `web/boards.json`, and the eight binaries under
+`web/firmware/` are dated 2026-09-09.
+
+**Be precise about what that does and does not mean.** `v0.4.4` is the tag on
+main's HEAD and `git rev-list --count v0.4.4..main` is 0, so the served images
+are current with respect to main. They are NOT current with respect to this
+branch: `fix/home-screen-full-repaint` carries one firmware change,
+`src/ui/ui_home.cpp`, which no served image contains. The flasher is serving a
+home screen that repaints the whole panel on every stat tick.
+
+- [ ] Re-stage and re-deploy after this branch merges, and bump the version
+      rather than staging 0.4.4 over itself, so a tester can tell from the
+      flasher page which images they were handed. Re-staging locally is not
+      deploying: verify against the served bytes, not against the local `web/`
+      tree.
 
 
 ## P. HoundLink carries three obligations that no document records
